@@ -4,6 +4,10 @@ inputs:
   docker-image-name:
     required: true
     description: "The repository name of the docker image to build."
+  docker-registry:
+    required: false
+    default: "registry.nas.lzy123.top"
+    description: "The registry hostname to push the docker image to."
   docker-username:
     required: true
     description: "Username for logging in to the docker registry."
@@ -45,9 +49,10 @@ runs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
 
-    - name: Login to DockerHub
+    - name: Login to docker registry
       uses: docker/login-action@v4
       with:
+        registry: ${{ inputs.docker-registry }}
         username: ${{ inputs.docker-username }}
         password: ${{ inputs.docker-password }}
 

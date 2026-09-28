@@ -12,6 +12,9 @@ BUILD_UNIXTIME="${BUILD_UNIXTIME}"
 BUILD_DATE="${BUILD_DATE}"
 PACKAGE_FILENAME=""
 DOCKER_TAG=""
+DOCKER_REGISTRY=""
+DOCKER_PUSH="0"
+DOCKER_DEFAULT_REGISTRY="registry.nas.lzy123.top/library"
 
 echo_red() {
     printf '\033[31m%s\033[0m\n' "$1"
@@ -44,6 +47,8 @@ Options:
     -r, --release           Build release (The script will use environment variable "RELEASE_BUILD" to detect whether this is release building by default)
     -o, --output <filename> Package file name (For "package" type only)
     -t, --tag               Docker tag (For "docker" type only)
+    --registry <path>       Docker registry path (For "docker" type only, e.g. "registry.nas.lzy123.top/library")
+    --push                  Push the docker image to the registry after building (For "docker" type only)
     --no-lint               Do not execute lint check before building
     --no-test               Do not execute unit testing before building (You can use environment variable "SKIP_TESTS" to skip specified tests)
     -h, --help              Show help
@@ -68,6 +73,13 @@ parse_args() {
             --tag | -t)
                 DOCKER_TAG="$2"
                 shift
+                ;;
+            --registry)
+                DOCKER_REGISTRY="$2"
+                shift
+                ;;
+            --push)
+                DOCKER_PUSH="1"
                 ;;
             --no-lint)
                 NO_LINT="1"
@@ -266,15 +278,40 @@ build_docker() {
         docker_tag="SNAPSHOT-$BUILD_DATE";
     fi
 
-    docker_tag="ezbookkeeping:$docker_tag"
+    if [ "$DOCKER_PUSH" = "1" ] && [ -z "$DOCKER_REGISTRY" ]; then
+        DOCKER_REGISTRY="$DOCKER_DEFAULT_REGISTRY"
+    fi
+
+    if [ -n "$DOCKER_REGISTRY" ]; then
+        docker_tag="$DOCKER_REGISTRY/ezbookkeeping:$docker_tag"
+    else
+        docker_tag="ezbookkeeping:$docker_tag"
+    fi
 
     if [ -n "$DOCKER_TAG" ]; then
         docker_tag="$DOCKER_TAG"
+
+        # The specified tag has no registry (e.g. "ezbookkeeping:2.0.1-local"),
+        # prefix it with the registry when the image will be pushed.
+        if [ "$DOCKER_PUSH" = "1" ] && [ "$docker_tag" = "${docker_tag#*/}" ]; then
+            docker_tag="$DOCKER_REGISTRY/$docker_tag"
+        fi
     fi
 
     echo "Building docker image \"$docker_tag\" ($RELEASE_TYPE)..."
 
     docker build . -t "$docker_tag" --build-arg RELEASE_BUILD=$RELEASE
+
+    if [ "$DOCKER_PUSH" = "1" ]; then
+        echo "Pushing docker image \"$docker_tag\" to \"$DOCKER_REGISTRY\"..."
+
+        docker push "$docker_tag"
+
+        if [ "$?" != "0" ]; then
+            echo_red "Error: Failed to push docker image \"$docker_tag\""
+            exit 1
+        fi
+    fi
 }
 
 main() {

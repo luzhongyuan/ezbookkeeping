@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+env:
+  # The docker images are pushed to the Harbor registry running on the NAS.
+  # Its public entry point is served by the Aliyun nginx and tunnelled to the NAS by frp.
+  EZBOOKKEEPING_DOCKER_REGISTRY: registry.nas.lzy123.top
+  EZBOOKKEEPING_DOCKER_IMAGE: registry.nas.lzy123.top/library/ezbookkeeping
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -30,7 +36,7 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: |
-            ${{ vars.DOCKER_IMAGE_NAME }}
+            ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
           tags: |
             type=raw,value=SNAPSHOT-{{date 'YYYYMMDD'}}-${{ github.run_id }}
             type=raw,value=SNAPSHOT-{{date 'YYYYMMDD'}}
@@ -39,7 +45,7 @@ jobs:
       - name: Set up variables
         id: variable
         run: |
-          echo "docker_push=${{ vars.DOCKER_IMAGE_NAME != '' && vars.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
+          echo "docker_push=${{ vars.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
           echo "build_unix_time=$(date '+%s')" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date '+%Y%m%d')" >> "$GITHUB_OUTPUT"
           echo "ezbookkeeping_docker_bake_meta_file_path=${{ runner.temp }}/bake-meta.json" >> "$GITHUB_OUTPUT"
@@ -78,7 +84,8 @@ jobs:
           platform: linux/amd64
           platform-name: linux-amd64
           docker-push: ${{ needs.setup.outputs.docker-push }}
-          docker-image-name: ${{ vars.DOCKER_IMAGE_NAME }}
+          docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
+          docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
           docker-username: ${{ vars.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
@@ -114,7 +121,8 @@ jobs:
           platform: ${{ matrix.platform }}
           platform-name: ${{ matrix.platform-name }}
           docker-push: ${{ needs.setup.outputs.docker-push }}
-          docker-image-name: ${{ vars.DOCKER_IMAGE_NAME }}
+          docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
+          docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
           docker-username: ${{ vars.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
@@ -136,7 +144,8 @@ jobs:
 
       - uses: ./.github/actions/push-linux-docker
         with:
-          docker-image-name: ${{ vars.DOCKER_IMAGE_NAME }}
+          docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
+          docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
           docker-username: ${{ vars.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
