@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Manual runs are available from the Actions tab (Actions -> Build Release -> Run workflow).
+  # Select an existing "v*.*.*" tag in the "Use workflow from" dropdown to rebuild and republish
+  # that release. Selecting a branch instead builds a "manual-<run id>" image only, so a manual run
+  # can never move the "latest" tag or touch an existing release.
+  workflow_dispatch:
+
+env:
+  # The docker images are pushed to the Harbor registry running on the NAS.
+  # Its public entry point is served by the Aliyun nginx and tunnelled to the NAS by frp.
+  EZBOOKKEEPING_DOCKER_REGISTRY: registry.nas.lzy123.top
+  EZBOOKKEEPING_DOCKER_IMAGE: registry.nas.lzy123.top/library/ezbookkeeping
 
 jobs:
   setup:
@@ -30,16 +41,17 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: |
-            ${{ vars.DOCKER_IMAGE_NAME }}
+            ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=manual-${{ github.run_id }},enable=${{ !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Set up variables
         id: variable
         run: |
-          echo "docker_push=${{ vars.DOCKER_IMAGE_NAME != '' && vars.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
+          echo "docker_push=${{ vars.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
           echo "build_unix_time=$(date '+%s')" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date '+%Y%m%d')" >> "$GITHUB_OUTPUT"
           echo "ezbookkeeping_docker_bake_meta_file_path=${{ runner.temp }}/bake-meta.json" >> "$GITHUB_OUTPUT"
@@ -79,7 +91,8 @@ jobs:
           platform: linux/amd64
           platform-name: linux-amd64
           docker-push: ${{ needs.setup.outputs.docker-push }}
-          docker-image-name: ${{ vars.DOCKER_IMAGE_NAME }}
+          docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
+          docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
           docker-username: ${{ vars.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
@@ -116,7 +129,8 @@ jobs:
           platform: ${{ matrix.platform }}
           platform-name: ${{ matrix.platform-name }}
           docker-push: ${{ needs.setup.outputs.docker-push }}
-          docker-image-name: ${{ vars.DOCKER_IMAGE_NAME }}
+          docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
+          docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
           docker-username: ${{ vars.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
@@ -138,7 +152,8 @@ jobs:
 
       - uses: ./.github/actions/push-linux-docker
         with:
-          docker-image-name: ${{ vars.DOCKER_IMAGE_NAME }}
+          docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
+          docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
           docker-username: ${{ vars.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
@@ -182,6 +197,24 @@ jobs:
           skip-tests: ${{ vars.SKIP_TESTS }}
           backend-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-backend-artifact-name-prefix }}
 
+  build-freebsd-backend:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/build-freebsd-backend
+        with:
+          architecture: amd64
+          release-build: 1
+          build-unix-time: ${{ needs.setup.outputs.build-unix-time }}
+          build-date: ${{ needs.setup.outputs.build-date }}
+          check-3rd-api: ${{ vars.CHECK_3RD_API }}
+          skip-tests: ${{ vars.SKIP_TESTS }}
+          backend-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-backend-artifact-name-prefix }}
+
   build-windows-package:
     needs:
       - setup
@@ -213,7 +246,24 @@ jobs:
           package-file-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-package-file-name-prefix }}
           backend-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-backend-artifact-name-prefix }}
 
+  build-freebsd-package:
+    needs:
+      - setup
+      - build-freebsd-backend
+      - build-linux-docker-and-package-x86
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/build-freebsd-package
+        with:
+          architecture: amd64
+          package-file-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-package-file-name-prefix }}
+          backend-artifact-name-prefix: ${{ needs.setup.outputs.ezbookkeeping-backend-artifact-name-prefix }}
+
   publish-release:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     needs:
       - setup
@@ -221,6 +271,7 @@ jobs:
       - build-linux-docker-and-package-arm
       - build-windows-package
       - build-macos-package
+      - build-freebsd-package
       - push-linux-docker
     steps:
       - name: Download all packaged files

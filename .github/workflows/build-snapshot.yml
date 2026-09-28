@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  # Manual runs are available from the Actions tab (Actions -> Build Snapshot -> Run workflow).
+  # Select the branch to build in the "Use workflow from" dropdown.
+  workflow_dispatch:
 
 jobs:
   setup:
