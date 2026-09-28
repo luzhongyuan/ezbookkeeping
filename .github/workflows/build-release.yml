@@ -50,8 +50,19 @@ jobs:
 
       - name: Set up variables
         id: variable
+        env:
+          # The Harbor credentials can be stored either as repository variables or as repository
+          # secrets. Keep the password in an environment variable, so that the value is never
+          # interpolated into the shell command.
+          EZBOOKKEEPING_DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME || secrets.DOCKER_USERNAME }}
+          EZBOOKKEEPING_DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
-          echo "docker_push=${{ vars.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}" >> "$GITHUB_OUTPUT"
+          if [ -n "$EZBOOKKEEPING_DOCKER_USERNAME" ] && [ -n "$EZBOOKKEEPING_DOCKER_PASSWORD" ]; then
+            echo "docker_push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docker_push=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Docker images are not pushed to the registry: configure the Docker registry credentials (repository variable or secret \"DOCKER_USERNAME\" and secret \"DOCKER_PASSWORD\")."
+          fi
           echo "build_unix_time=$(date '+%s')" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date '+%Y%m%d')" >> "$GITHUB_OUTPUT"
           echo "ezbookkeeping_docker_bake_meta_file_path=${{ runner.temp }}/bake-meta.json" >> "$GITHUB_OUTPUT"
@@ -93,7 +104,7 @@ jobs:
           docker-push: ${{ needs.setup.outputs.docker-push }}
           docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
           docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
-          docker-username: ${{ vars.DOCKER_USERNAME }}
+          docker-username: ${{ vars.DOCKER_USERNAME || secrets.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
           docker-bake-meta-artifact-name: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-artifact-name }}
@@ -131,7 +142,7 @@ jobs:
           docker-push: ${{ needs.setup.outputs.docker-push }}
           docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
           docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
-          docker-username: ${{ vars.DOCKER_USERNAME }}
+          docker-username: ${{ vars.DOCKER_USERNAME || secrets.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
           docker-bake-meta-artifact-name: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-artifact-name }}
@@ -154,7 +165,7 @@ jobs:
         with:
           docker-image-name: ${{ env.EZBOOKKEEPING_DOCKER_IMAGE }}
           docker-registry: ${{ env.EZBOOKKEEPING_DOCKER_REGISTRY }}
-          docker-username: ${{ vars.DOCKER_USERNAME }}
+          docker-username: ${{ vars.DOCKER_USERNAME || secrets.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           docker-bake-meta-file-path: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-file-path }}
           docker-bake-meta-artifact-name: ${{ needs.setup.outputs.ezbookkeeping-docker-bake-meta-artifact-name }}
