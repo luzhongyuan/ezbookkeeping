@@ -16,12 +16,6 @@ env:
   EZBOOKKEEPING_DOCKER_REGISTRY: registry.nas.lzy123.top
   EZBOOKKEEPING_DOCKER_IMAGE: registry.nas.lzy123.top/library/ezbookkeeping
 
-env:
-  # The docker images are pushed to the Harbor registry running on the NAS.
-  # Its public entry point is served by the Aliyun nginx and tunnelled to the NAS by frp.
-  EZBOOKKEEPING_DOCKER_REGISTRY: registry.nas.lzy123.top
-  EZBOOKKEEPING_DOCKER_IMAGE: registry.nas.lzy123.top/library/ezbookkeeping
-
 jobs:
   setup:
     runs-on: ubuntu-latest

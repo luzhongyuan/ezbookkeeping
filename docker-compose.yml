@@ -1,0 +1,17 @@
+# Server deployment for ezbookkeeping.
+# Copy this file to the server, then:
+#   docker login registry.nas.lzy123.top
+#   docker compose pull && docker compose up -d
+services:
+  ezbookkeeping:
+    image: registry.nas.lzy123.top/library/ezbookkeeping:latest-snapshot
+    container_name: ezbookkeeping
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data:/ezbookkeeping/data
+      - ./log:/ezbookkeeping/log
+      - ./storage:/ezbookkeeping/storage
+    restart: unless-stopped
