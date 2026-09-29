@@ -12,7 +12,7 @@ import {
 export function transactionTypeToCategoryType(transactionType: TransactionType): CategoryType | null {
     if (transactionType === TransactionType.Income) {
         return CategoryType.Income;
-    } else if (transactionType === TransactionType.Expense) {
+    } else if (transactionType === TransactionType.Expense || transactionType === TransactionType.Refund) {
         return CategoryType.Expense;
     } else if (transactionType === TransactionType.Transfer) {
         return CategoryType.Transfer;

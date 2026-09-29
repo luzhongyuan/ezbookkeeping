@@ -4,7 +4,8 @@ export enum TransactionType {
     ModifyBalance = 1,
     Income = 2,
     Expense = 3,
-    Transfer = 4
+    Transfer = 4,
+    Refund = 5
 }
 
 export enum TransactionAmountType {

@@ -515,6 +515,8 @@ export function useTransactionListPageBase() {
                 return tt('Expense');
             case TransactionType.Transfer:
                 return tt('Transfer');
+            case TransactionType.Refund:
+                return tt('Refund');
             default:
                 return tt(defaultName);
         }

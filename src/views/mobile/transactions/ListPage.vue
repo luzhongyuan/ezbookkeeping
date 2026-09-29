@@ -264,7 +264,7 @@
                                             </div>
                                             <div class="item-after">
                                                 <div class="transaction-amount" v-if="transaction.sourceAccount"
-                                                     :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
+                                                     :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income || transaction.type === TransactionType.Refund }">
                                                     <span>{{ getDisplayAmount(transaction) }}</span>
                                                 </div>
                                             </div>
@@ -275,7 +275,11 @@
                                             </div>
                                         </div>
                                         <div class="item-footer">
-                                            <div class="transaction-tags" v-if="showTagInTransactionListPage && transaction.tagIds && transaction.tagIds.length">
+                                            <div class="transaction-tags" v-if="transaction.type === TransactionType.Refund || (showTagInTransactionListPage && transaction.tagIds && transaction.tagIds.length)">
+                                                <f7-chip media-text-color="var(--f7-chip-text-color)" class="transaction-tag"
+                                                         :text="tt('Refund')"
+                                                         v-if="transaction.type === TransactionType.Refund">
+                                                </f7-chip>
                                                 <f7-chip media-text-color="var(--f7-chip-text-color)" class="transaction-tag"
                                                          :text="allTransactionTags[tagId]?.name"
                                                          :key="tagId"
@@ -549,6 +553,14 @@
                               @click="changeTypeFilter(4)">
                     <template #after>
                         <f7-icon class="list-item-checked-icon" f7="checkmark_alt" v-if="query.type === 4"></f7-icon>
+                    </template>
+                </f7-list-item>
+                <f7-list-item link="#" no-chevron popover-close
+                              :class="{ 'list-item-selected': query.type === 5 }"
+                              :title="tt('Refund')"
+                              @click="changeTypeFilter(5)">
+                    <template #after>
+                        <f7-icon class="list-item-checked-icon" f7="checkmark_alt" v-if="query.type === 5"></f7-icon>
                     </template>
                 </f7-list-item>
 
@@ -1344,7 +1356,7 @@ function changeCategoryFilter(categoryIds: string): void {
 function filterMultipleCategories(): void {
     let navigateUrl = '/settings/filter/category?type=transactionListCurrent';
 
-    if (TransactionType.Income <= query.value.type && query.value.type <= TransactionType.Transfer) {
+    if (TransactionType.Income <= query.value.type && query.value.type <= TransactionType.Refund) {
         navigateUrl += '&allowCategoryTypes=' + transactionTypeToCategoryType(query.value.type);
     }
 

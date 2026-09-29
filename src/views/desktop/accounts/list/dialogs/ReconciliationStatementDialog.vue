@@ -192,7 +192,7 @@
                     </template>
                     <template #item.type="{ item }">
                         <v-chip label variant="outlined" size="x-small"
-                                :class="{ 'text-income' : item.type === TransactionType.Income, 'text-expense': item.type === TransactionType.Expense }"
+                                :class="{ 'text-income' : item.type === TransactionType.Income || item.type === TransactionType.Refund, 'text-expense': item.type === TransactionType.Expense }"
                                 :color="getTransactionTypeColor(item)">{{ getDisplayTransactionType(item) }}</v-chip>
                     </template>
                     <template #item.categoryName="{ item }">
@@ -513,6 +513,8 @@ function getTransactionTypeColor(transaction: TransactionReconciliationStatement
     } else if (transaction.type === TransactionType.Income) {
         return undefined;
     } else if (transaction.type === TransactionType.Expense) {
+        return undefined;
+    } else if (transaction.type === TransactionType.Refund) {
         return undefined;
     } else if (transaction.type === TransactionType.Transfer) {
         return 'primary';

@@ -18,6 +18,7 @@ const transactionTypeIncome = "income"
 const transactionTypeExpense = "expense"
 const transactionTypeTransfer = "transfer"
 const transactionTypeModifyBalance = "balance_modification"
+const transactionTypeRefund = "refund"
 
 // MCPAddTransactionRequest represents all parameters of the add transaction request
 type MCPAddTransactionRequest struct {

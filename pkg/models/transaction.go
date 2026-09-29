@@ -25,6 +25,7 @@ const (
 	TRANSACTION_TYPE_INCOME         TransactionType = 2
 	TRANSACTION_TYPE_EXPENSE        TransactionType = 3
 	TRANSACTION_TYPE_TRANSFER       TransactionType = 4
+	TRANSACTION_TYPE_REFUND         TransactionType = 5
 )
 
 // ToTransactionDbType returns the transaction db type for this enum
@@ -37,6 +38,8 @@ func (t TransactionType) ToTransactionDbType() (TransactionDbType, error) {
 		return TRANSACTION_DB_TYPE_INCOME, nil
 	} else if t == TRANSACTION_TYPE_TRANSFER {
 		return TRANSACTION_DB_TYPE_TRANSFER_OUT, nil
+	} else if t == TRANSACTION_TYPE_REFUND {
+		return TRANSACTION_DB_TYPE_INCOME, nil
 	} else {
 		return 0, errs.ErrTransactionTypeInvalid
 	}
@@ -137,6 +140,7 @@ type Transaction struct {
 	RelatedId            int64             `xorm:"NOT NULL"`
 	RelatedAccountId     int64             `xorm:"NOT NULL"`
 	RelatedAccountAmount int64             `xorm:"NOT NULL"`
+	RelatedTransactionId int64             `xorm:"INDEX(IDX_transaction_related_transaction_id) NOT NULL DEFAULT 0"`
 	HideAmount           bool              `xorm:"NOT NULL"`
 	Comment              string            `xorm:"VARCHAR(255) NOT NULL"`
 	GeoLongitude         float64           `xorm:"INDEX(IDX_transaction_uid_deleted_time_longitude_latitude)"`
@@ -171,6 +175,7 @@ type TransactionCreateRequest struct {
 	DestinationAccountId int64                          `json:"destinationAccountId,string" binding:"min=0"`
 	SourceAmount         int64                          `json:"sourceAmount" binding:"validTransactionAmount"`
 	DestinationAmount    int64                          `json:"destinationAmount" binding:"validTransactionAmount"`
+	RelatedTransactionId int64                          `json:"relatedTransactionId,string" binding:"min=0"`
 	HideAmount           bool                           `json:"hideAmount"`
 	TagIds               []string                       `json:"tagIds"`
 	PictureIds           []string                       `json:"pictureIds"`
@@ -190,6 +195,7 @@ type TransactionModifyRequest struct {
 	DestinationAccountId int64                          `json:"destinationAccountId,string" binding:"min=0"`
 	SourceAmount         int64                          `json:"sourceAmount" binding:"validTransactionAmount"`
 	DestinationAmount    int64                          `json:"destinationAmount" binding:"validTransactionAmount"`
+	RelatedTransactionId int64                          `json:"relatedTransactionId,string" binding:"min=0"`
 	HideAmount           bool                           `json:"hideAmount"`
 	TagIds               []string                       `json:"tagIds"`
 	PictureIds           []string                       `json:"pictureIds"`
@@ -215,7 +221,7 @@ type TransactionTagFilter struct {
 
 // TransactionCountRequest represents transaction count request
 type TransactionCountRequest struct {
-	Type             TransactionType `form:"type" binding:"min=0,max=4"`
+	Type             TransactionType `form:"type" binding:"min=0,max=5"`
 	CategoryIds      string          `form:"category_ids"`
 	AccountIds       string          `form:"account_ids"`
 	TagFilter        string          `form:"tag_filter" binding:"validTagFilter"`
@@ -229,7 +235,7 @@ type TransactionCountRequest struct {
 
 // TransactionListByMaxTimeRequest represents all parameters of transaction listing by max time request
 type TransactionListByMaxTimeRequest struct {
-	Type             TransactionType `form:"type" binding:"min=0,max=4"`
+	Type             TransactionType `form:"type" binding:"min=0,max=5"`
 	CategoryIds      string          `form:"category_ids"`
 	AccountIds       string          `form:"account_ids"`
 	TagFilter        string          `form:"tag_filter" binding:"validTagFilter"`
@@ -252,7 +258,7 @@ type TransactionListByMaxTimeRequest struct {
 type TransactionListInMonthByPageRequest struct {
 	Year             int32           `form:"year" binding:"required,min=1"`
 	Month            int32           `form:"month" binding:"required,min=1"`
-	Type             TransactionType `form:"type" binding:"min=0,max=4"`
+	Type             TransactionType `form:"type" binding:"min=0,max=5"`
 	CategoryIds      string          `form:"category_ids"`
 	AccountIds       string          `form:"account_ids"`
 	TagFilter        string          `form:"tag_filter" binding:"validTagFilter"`
@@ -268,7 +274,7 @@ type TransactionListInMonthByPageRequest struct {
 
 // TransactionAllListRequest represents all parameters of all transaction listing request
 type TransactionAllListRequest struct {
-	Type             TransactionType `form:"type" binding:"min=0,max=4"`
+	Type             TransactionType `form:"type" binding:"min=0,max=5"`
 	CategoryIds      string          `form:"category_ids"`
 	AccountIds       string          `form:"account_ids"`
 	TagFilter        string          `form:"tag_filter" binding:"validTagFilter"`
@@ -425,6 +431,8 @@ type TransactionInfoResponse struct {
 	DestinationAccount   *AccountInfoResponse                     `json:"destinationAccount,omitempty"`
 	SourceAmount         int64                                    `json:"sourceAmount"`
 	DestinationAmount    *int64                                   `json:"destinationAmount,omitempty"`
+	RelatedTransactionId int64                                    `json:"relatedTransactionId,string,omitempty"`
+	RefundedAmount       int64                                    `json:"refundedAmount,omitempty"`
 	HideAmount           bool                                     `json:"hideAmount"`
 	TagIds               []string                                 `json:"tagIds"`
 	Tags                 []*TransactionTagInfoResponse            `json:"tags,omitempty"`
@@ -628,7 +636,9 @@ func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, editable bool) *
 	destinationAccountId := int64(0)
 	var destinationAmount *int64
 
-	if t.Type == TRANSACTION_DB_TYPE_TRANSFER_OUT {
+	if t.Type == TRANSACTION_DB_TYPE_INCOME && t.RelatedTransactionId != 0 {
+		transactionType = TRANSACTION_TYPE_REFUND
+	} else if t.Type == TRANSACTION_DB_TYPE_TRANSFER_OUT {
 		destinationAccountId = t.RelatedAccountId
 		destinationAmount = &t.RelatedAccountAmount
 	} else if t.Type == TRANSACTION_DB_TYPE_TRANSFER_IN {
@@ -659,6 +669,7 @@ func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, editable bool) *
 		DestinationAccountId: destinationAccountId,
 		SourceAmount:         sourceAmount,
 		DestinationAmount:    destinationAmount,
+		RelatedTransactionId: t.RelatedTransactionId,
 		HideAmount:           t.HideAmount,
 		TagIds:               utils.Int64ArrayToStringArray(tagIds),
 		Comment:              t.Comment,

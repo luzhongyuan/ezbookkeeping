@@ -20,7 +20,7 @@ const pageCountForLoadTransactions = 1000
 type MCPQueryTransactionsRequest struct {
 	StartTime             string `json:"start_time" jsonschema:"format=date-time" jsonschema_description:"Start time for the query in RFC 3339 format (e.g. 2023-01-01T12:00:00Z)"`
 	EndTime               string `json:"end_time" jsonschema:"format=date-time" jsonschema_description:"End time for the query in RFC 3339 format or (e.g. 2023-01-01T12:00:00Z)"`
-	Type                  string `json:"type,omitempty" jsonschema:"enum=income,enum=expense,enum=transfer,enum=balance_modification" jsonschema_description:"Transaction type to filter by (income, expense, transfer, balance_modification) (optional)"`
+	Type                  string `json:"type,omitempty" jsonschema:"enum=income,enum=expense,enum=transfer,enum=balance_modification,enum=refund" jsonschema_description:"Transaction type to filter by (income, expense, transfer, balance_modification, refund) (optional)"`
 	SecondaryCategoryName string `json:"category_name,omitempty" jsonschema_description:"Primary or secondary category name to filter transactions by (optional)"`
 	AccountName           string `json:"account_name,omitempty" jsonschema_description:"Account name to filter transactions by (optional)"`
 	Keyword               string `json:"keyword,omitempty" jsonschema_description:"Keyword to search in transaction description (optional)"`
@@ -41,7 +41,7 @@ type MCPQueryTransactionsResponse struct {
 // MCPTransactionInfo defines the structure of transaction information
 type MCPTransactionInfo struct {
 	Time                   string `json:"time,omitempty" jsonschema_description:"Time of the transaction in RFC 3339 format (e.g. 2023-01-01T12:00:00Z)"`
-	Type                   string `json:"type" jsonschema:"enum=income,enum=expense,enum=transfer,enum=balance_modification" jsonschema_description:"Transaction type (income, expense, transfer, balance_modification)"`
+	Type                   string `json:"type" jsonschema:"enum=income,enum=expense,enum=transfer,enum=balance_modification,enum=refund" jsonschema_description:"Transaction type (income, expense, transfer, balance_modification, refund)"`
 	Amount                 string `json:"amount" jsonschema_description:"Amount of the transaction in the specified currency"`
 	Currency               string `json:"currency,omitempty" jsonschema_description:"Currency code of the transaction (e.g. USD, EUR)"`
 	SecondaryCategoryName  string `json:"category_name,omitempty" jsonschema_description:"Secondary category name for the transaction"`
@@ -122,6 +122,8 @@ func (h *mcpQueryTransactionsToolHandler) Handle(c *core.WebContext, callToolReq
 		transactionType = models.TRANSACTION_TYPE_TRANSFER
 	} else if queryTransactionsRequest.Type == transactionTypeModifyBalance {
 		transactionType = models.TRANSACTION_TYPE_MODIFY_BALANCE
+	} else if queryTransactionsRequest.Type == transactionTypeRefund {
+		transactionType = models.TRANSACTION_TYPE_REFUND
 	} else if queryTransactionsRequest.Type != "" {
 		return nil, nil, errs.ErrTransactionTypeInvalid
 	}
@@ -208,7 +210,11 @@ func (h *mcpQueryTransactionsToolHandler) createNewMCPQueryTransactionsResponse(
 		if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			transactionInfo.Type = transactionTypeExpense
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
-			transactionInfo.Type = transactionTypeIncome
+			if transaction.RelatedTransactionId != 0 {
+				transactionInfo.Type = transactionTypeRefund
+			} else {
+				transactionInfo.Type = transactionTypeIncome
+			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
 			transactionInfo.Type = transactionTypeTransfer
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {

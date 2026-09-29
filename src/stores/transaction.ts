@@ -426,7 +426,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 const balance = exchangeRatesStore.getExchangedAmount(amount, account.currency, defaultCurrency);
 
                 if (!balance) {
-                    if (transaction.type === TransactionType.Expense) {
+                    if (transaction.type === TransactionType.Expense || transaction.type === TransactionType.Refund) {
                         hasUnCalculatedTotalOutflow = true;
                         hasUnCalculatedTotalExpense = true;
                         inflowOutflowDailyTotalAmount.incompleteExpense = true;
@@ -465,6 +465,12 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 totalExpense = totalExpense.add(amount);
                 inflowOutflowDailyTotalAmount.expense = inflowOutflowDailyTotalAmount.expense.add(amount);
                 incomeExpenseDailyTotalAmount.expense = incomeExpenseDailyTotalAmount.expense.add(amount);
+            } else if (transaction.type === TransactionType.Refund) {
+                // refund transaction offsets the expense of the original transaction
+                totalOutflow = totalOutflow.subtract(amount);
+                totalExpense = totalExpense.subtract(amount);
+                inflowOutflowDailyTotalAmount.expense = inflowOutflowDailyTotalAmount.expense.subtract(amount);
+                incomeExpenseDailyTotalAmount.expense = incomeExpenseDailyTotalAmount.expense.subtract(amount);
             } else if (transaction.type === TransactionType.Income) {
                 totalInflow = totalInflow.add(amount);
                 totalIncome = totalIncome.add(amount);
@@ -680,7 +686,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
 
     function setTransactionSuitableDestinationAmount(transaction: Transaction, oldSourceAmount: number, newSourceAmount: number, oldSourceAccountId?: string, oldDestinationAccountId?: string): void {
-        if (transaction.type === TransactionType.Expense || transaction.type === TransactionType.Income) {
+        if (transaction.type === TransactionType.Expense || transaction.type === TransactionType.Income || transaction.type === TransactionType.Refund) {
             transaction.destinationAmount = newSourceAmount;
         } else if (transaction.type === TransactionType.Transfer) {
             const sourceAccount = accountsStore.allAccountsMap[transaction.sourceAccountId];
@@ -1214,10 +1220,14 @@ export const useTransactionsStore = defineStore('transactions', () => {
             if (transaction.type !== TransactionType.Expense &&
                 transaction.type !== TransactionType.Income &&
                 transaction.type !== TransactionType.Transfer &&
-                transaction.type !== TransactionType.ModifyBalance) {
+                transaction.type !== TransactionType.ModifyBalance &&
+                transaction.type !== TransactionType.Refund) {
                 reject({ message: 'An error occurred' });
                 return;
             } else if (!isEdit && transaction.type === TransactionType.ModifyBalance) {
+                reject({ message: 'An error occurred' });
+                return;
+            } else if (transaction.type === TransactionType.Refund && (!transaction.relatedTransactionId || transaction.relatedTransactionId === '0')) {
                 reject({ message: 'An error occurred' });
                 return;
             }

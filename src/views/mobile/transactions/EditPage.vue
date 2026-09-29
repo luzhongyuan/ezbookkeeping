@@ -13,18 +13,20 @@
             <f7-segmented strong round :class="{ 'readonly': pageTypeAndMode?.type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit }">
                 <f7-button round :text="tt('Expense')" :active="transaction.type === TransactionType.Expense"
                            :disabled="pageTypeAndMode?.type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Expense"
-                           v-if="transaction.type !== TransactionType.ModifyBalance"
+                           v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund"
                            @click="transaction.type = TransactionType.Expense"></f7-button>
                 <f7-button round :text="tt('Income')" :active="transaction.type === TransactionType.Income"
                            :disabled="pageTypeAndMode?.type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Income"
-                           v-if="transaction.type !== TransactionType.ModifyBalance"
+                           v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund"
                            @click="transaction.type = TransactionType.Income"></f7-button>
                 <f7-button round :text="tt('Transfer')" :active="transaction.type === TransactionType.Transfer"
                            :disabled="pageTypeAndMode?.type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Transfer"
-                           v-if="transaction.type !== TransactionType.ModifyBalance"
+                           v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund"
                            @click="transaction.type = TransactionType.Transfer"></f7-button>
                 <f7-button round :text="tt('Modify Balance')" :active="transaction.type === TransactionType.ModifyBalance"
                            v-if="pageTypeAndMode?.type === TransactionEditPageType.Transaction && transaction.type === TransactionType.ModifyBalance"></f7-button>
+                <f7-button round :text="tt('Refund')" :active="transaction.type === TransactionType.Refund"
+                           v-if="pageTypeAndMode?.type === TransactionEditPageType.Transaction && transaction.type === TransactionType.Refund"></f7-button>
             </f7-segmented>
         </f7-block>
 
@@ -83,6 +85,13 @@
             </f7-list-item>
 
             <f7-list-item
+                class="list-item-with-header-and-title"
+                :header="tt('Refunded Amount')"
+                :title="getDisplayAmount(parseBigDecimal(transaction.refundedAmount), transaction.hideAmount, sourceAccountCurrency)"
+                v-if="showRefundedAmount"
+            ></f7-list-item>
+
+            <f7-list-item
                 class="transaction-edit-amount text-color-primary"
                 link="#" no-chevron
                 :class="destinationAmountClass"
@@ -106,7 +115,7 @@
                 :class="{ 'disabled': !hasVisibleExpenseCategories, 'readonly': mode === TransactionEditPageMode.View }"
                 :header="tt('Category')"
                 @click="showCategorySheet = true"
-                v-if="transaction.type === TransactionType.Expense"
+                v-if="transaction.type === TransactionType.Expense || transaction.type === TransactionType.Refund"
             >
                 <template #title>
                     <div class="list-item-custom-title" v-if="hasVisibleExpenseCategories">
@@ -473,6 +482,7 @@
                 <f7-actions-button @click="showTransactionPictures = true">{{ tt('Add Picture') }}</f7-actions-button>
             </f7-actions-group>
             <f7-actions-group v-if="pageTypeAndMode?.type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.View && transaction.type !== TransactionType.ModifyBalance">
+                <f7-actions-button @click="refund" v-if="canRefund">{{ tt('Refund') }}</f7-actions-button>
                 <f7-actions-button @click="duplicate(false, false)">{{ tt('Duplicate') }}</f7-actions-button>
                 <f7-actions-button @click="duplicate(true, false)">{{ tt('Duplicate (With Time)') }}</f7-actions-button>
                 <f7-actions-button @click="duplicate(false, true)" v-if="transaction.geoLocation">{{ tt('Duplicate (With Geographic Location)') }}</f7-actions-button>
@@ -562,6 +572,7 @@ import { Transaction } from '@/models/transaction.ts';
 import { isDefined } from '@/lib/common.ts';
 import { parseBigDecimal } from '@/lib/numeral.ts';
 import {
+    getCurrentUnixTime,
     getTimezoneOffset,
     getTimezoneOffsetMinutes,
     parseDateTimeFromUnixTimeWithTimezoneOffset
@@ -712,13 +723,24 @@ const sourceAmountClass = computed<Record<string, boolean>>(() => {
     const classes: Record<string, boolean> = {
         'readonly': mode.value === TransactionEditPageMode.View,
         'text-expense': transaction.value.type === TransactionType.Expense,
-        'text-income': transaction.value.type === TransactionType.Income,
+        'text-income': transaction.value.type === TransactionType.Income || transaction.value.type === TransactionType.Refund,
         'text-color-primary': transaction.value.type === TransactionType.Transfer
     };
 
     classes[getFontClassByAmount(transaction.value.sourceAmount)] = true;
 
     return classes;
+});
+
+const canRefund = computed<boolean>(() => {
+    return pageTypeAndMode?.type === TransactionEditPageType.Transaction
+        && mode.value === TransactionEditPageMode.View
+        && transaction.value.type === TransactionType.Expense
+        && transaction.value.getRefundableAmount() > 0;
+});
+
+const showRefundedAmount = computed<boolean>(() => {
+    return transaction.value.type === TransactionType.Expense && transaction.value.refundedAmount > 0;
 });
 
 const destinationAmountClass = computed<Record<string, boolean>>(() => {
@@ -1050,6 +1072,19 @@ function init(): void {
 
             if (fromTransaction && query['withGeoLocation'] && query['withGeoLocation'] === 'true') {
                 transaction.value.setGeoLocation(fromTransaction.geoLocation);
+            }
+
+            if (initOptions.type === TransactionType.Refund && fromTransaction && fromTransaction instanceof Transaction && fromTransaction.type === TransactionType.Expense) {
+                transaction.value.type = TransactionType.Refund;
+                transaction.value.relatedTransactionId = fromTransaction.id;
+                transaction.value.refundedAmount = 0;
+                transaction.value.sourceAmount = fromTransaction.getRefundableAmount();
+                transaction.value.destinationAmount = transaction.value.sourceAmount;
+                transaction.value.time = getCurrentUnixTime();
+                transaction.value.timeZone = settingsStore.appSettings.timeZone;
+                transaction.value.utcOffset = getTimezoneOffsetMinutes(transaction.value.time, transaction.value.timeZone);
+                transaction.value.removeGeoLocation();
+                transaction.value.clearPictures();
             }
         } else if (pageTypeAndMode.type === TransactionEditPageType.Template && query['id'] && responses[4] instanceof TransactionTemplate) {
             const template = responses[4];
@@ -1429,6 +1464,20 @@ function viewOrRemovePicture(pictureInfo: TransactionPictureInfoBasicResponse): 
 
 function duplicate(withTime?: boolean, withGeoLocation?: boolean): void {
     props.f7router.navigate(`/transaction/add?id=${transaction.value.id}&type=${transaction.value.type}&withTime=${withTime ?? false}&withGeoLocation=${withGeoLocation ?? false}`);
+}
+
+function refund(): void {
+    if (pageTypeAndMode?.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
+        return;
+    }
+
+    const refundableAmount = transaction.value.getRefundableAmount();
+
+    if (transaction.value.type !== TransactionType.Expense || refundableAmount <= 0) {
+        return;
+    }
+
+    props.f7router.navigate(`/transaction/add?id=${transaction.value.id}&type=${TransactionType.Refund}`);
 }
 
 function onUploadPicture(event: Event): void {

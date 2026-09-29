@@ -171,7 +171,12 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 				totalOutflows.Sub(totalOutflows, big.NewInt(transaction.RelatedAccountAmount))
 			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
-			totalInflows.Add(totalInflows, big.NewInt(transaction.Amount))
+			if transaction.RelatedTransactionId != 0 {
+				// refund transaction offsets the expense of the original transaction
+				totalOutflows.Sub(totalOutflows, big.NewInt(transaction.Amount))
+			} else {
+				totalInflows.Add(totalInflows, big.NewInt(transaction.Amount))
+			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			totalOutflows.Add(totalOutflows, big.NewInt(transaction.Amount))
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
@@ -424,20 +429,14 @@ func (s *TransactionService) getTransactionsByMaxTimeWithOffset(c core.Context, 
 		return nil, errs.ErrUserIdInvalid
 	}
 
-	var err error
-	var transactionDbType models.TransactionDbType = 0
-
-	if transactionType > 0 {
-		transactionDbType, err = transactionType.ToTransactionDbType()
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	var transactions []*models.Transaction
 
-	condition, conditionParams := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionDbType, categoryIds, accountIds, tagFilters, amountFilter, keyword, matchMode, noDuplicated)
+	condition, conditionParams, err := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionType, categoryIds, accountIds, tagFilters, amountFilter, keyword, matchMode, noDuplicated)
+
+	if err != nil {
+		return nil, err
+	}
+
 	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
 	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 	sess = s.appendFilterPicturesConditionToQuery(sess, uid, mustHavePictures)
@@ -453,17 +452,6 @@ func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid in
 		return nil, errs.ErrUserIdInvalid
 	}
 
-	var err error
-	var transactionDbType models.TransactionDbType = 0
-
-	if transactionType > 0 {
-		transactionDbType, err = transactionType.ToTransactionDbType()
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	minTransactionTime, maxTransactionTime, err := utils.GetTransactionTimeRangeByYearMonth(year, month)
 
 	if err != nil {
@@ -472,7 +460,11 @@ func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid in
 
 	var transactions []*models.Transaction
 
-	condition, conditionParams := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionDbType, categoryIds, accountIds, tagFilters, amountFilter, keyword, matchMode, true)
+	condition, conditionParams, err := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionType, categoryIds, accountIds, tagFilters, amountFilter, keyword, matchMode, true)
+
+	if err != nil {
+		return nil, err
+	}
 	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
 	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 	sess = s.appendFilterPicturesConditionToQuery(sess, uid, mustHavePictures)
@@ -532,6 +524,32 @@ func (s *TransactionService) GetTransactionsByTransactionIds(c core.Context, uid
 	return transactions, err
 }
 
+// GetRefundedAmountsByTransactionIds returns total refunded amounts of given transactions
+func (s *TransactionService) GetRefundedAmountsByTransactionIds(c core.Context, uid int64, transactionIds []int64) (map[int64]int64, error) {
+	if uid <= 0 {
+		return nil, errs.ErrUserIdInvalid
+	}
+
+	refundedAmounts := make(map[int64]int64)
+
+	if len(transactionIds) <= 0 {
+		return refundedAmounts, nil
+	}
+
+	var transactions []*models.Transaction
+	err := s.UserDataDB(uid).NewSession(c).Cols("related_transaction_id", "amount").Where("uid=? AND deleted=? AND related_transaction_id<>0", uid, false).In("related_transaction_id", transactionIds).Find(&transactions)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < len(transactions); i++ {
+		refundedAmounts[transactions[i].RelatedTransactionId] += transactions[i].Amount
+	}
+
+	return refundedAmounts, nil
+}
+
 // GetAllTransactionCount returns total count of transactions
 func (s *TransactionService) GetAllTransactionCount(c core.Context, uid int64) (int64, error) {
 	return s.GetTransactionCount(c, uid, 0, 0, 0, nil, nil, nil, false, "", "", core.MATCH_MODE_DEFAULT, false)
@@ -543,18 +561,12 @@ func (s *TransactionService) GetTransactionCount(c core.Context, uid int64, maxT
 		return 0, errs.ErrUserIdInvalid
 	}
 
-	var err error
-	var transactionDbType models.TransactionDbType = 0
+	condition, conditionParams, err := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionType, categoryIds, accountIds, tagFilters, amountFilter, keyword, matchMode, true)
 
-	if transactionType > 0 {
-		transactionDbType, err = transactionType.ToTransactionDbType()
-
-		if err != nil {
-			return 0, err
-		}
+	if err != nil {
+		return 0, err
 	}
 
-	condition, conditionParams := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionDbType, categoryIds, accountIds, tagFilters, amountFilter, keyword, matchMode, true)
 	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
 	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 	sess = s.appendFilterPicturesConditionToQuery(sess, uid, mustHavePictures)
@@ -1030,6 +1042,43 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 
 		if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE && oldTransaction.Type != models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
 			return errs.ErrTransactionTypeInvalid
+		}
+
+		// The type and the related transaction of a refund transaction are immutable
+		if oldTransaction.RelatedTransactionId != 0 {
+			if transaction.Type != models.TRANSACTION_DB_TYPE_INCOME {
+				return errs.ErrCannotModifyRefundTransactionType
+			}
+
+			transaction.RelatedTransactionId = oldTransaction.RelatedTransactionId
+		} else if transaction.RelatedTransactionId != 0 {
+			return errs.ErrTransactionTypeInvalid
+		}
+
+		if transaction.RelatedTransactionId != 0 {
+			err = s.verifyRefundTransaction(sess, transaction, oldTransaction.TransactionId)
+
+			if err != nil {
+				return err
+			}
+		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE &&
+			(transaction.Type != oldTransaction.Type || transaction.Amount < oldTransaction.Amount) {
+			// The transaction which has refunds cannot change type or reduce amount to be less than refunded amount
+			refundedAmount, err := s.getRefundedAmountByTransactionId(sess, transaction.Uid, oldTransaction.TransactionId, 0)
+
+			if err != nil {
+				return err
+			}
+
+			if refundedAmount > 0 {
+				if transaction.Type != models.TRANSACTION_DB_TYPE_EXPENSE {
+					return errs.ErrCannotModifyTransactionTypeWithRefunds
+				}
+
+				if transaction.Amount < refundedAmount {
+					return errs.ErrCannotModifyTransactionAmountBelowRefundedAmount
+				}
+			}
 		}
 
 		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT && oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
@@ -2042,6 +2091,17 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 			return errs.ErrTransactionNotFound
 		}
 
+		// The transaction which has refunds cannot be deleted
+		if oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
+			refundExists, err := sess.Cols("transaction_id").Where("uid=? AND deleted=? AND related_transaction_id=?", uid, false, oldTransaction.TransactionId).Limit(1).Exist(&models.Transaction{})
+
+			if err != nil {
+				return err
+			} else if refundExists {
+				return errs.ErrCannotDeleteTransactionWithRefunds
+			}
+		}
+
 		// Get and verify source and destination account
 		sourceAccount, destinationAccount, err := s.getAccountModels(sess, oldTransaction)
 
@@ -2331,9 +2391,16 @@ func (s *TransactionService) GetAccountsTotalIncomeAndExpense(c core.Context, ui
 		}
 
 		var amountsMap map[int64]*big.Int
+		amount := transaction.Amount
 
 		if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
-			amountsMap = incomeAmounts
+			if transaction.RelatedTransactionId != 0 {
+				// refund transaction offsets the expense of the original transaction
+				amountsMap = expenseAmounts
+				amount = -amount
+			} else {
+				amountsMap = incomeAmounts
+			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			amountsMap = expenseAmounts
 		}
@@ -2344,7 +2411,7 @@ func (s *TransactionService) GetAccountsTotalIncomeAndExpense(c core.Context, ui
 			totalAmounts = big.NewInt(0)
 		}
 
-		totalAmounts.Add(totalAmounts, big.NewInt(transaction.Amount))
+		totalAmounts.Add(totalAmounts, big.NewInt(amount))
 		amountsMap[transaction.AccountId] = totalAmounts
 	}
 
@@ -2385,9 +2452,16 @@ func (s *TransactionService) GetAccountsDailyIncomeAndExpense(c core.Context, ui
 		}
 
 		var allAmounts map[int32]map[int64]*big.Int
+		transactionAmount := transaction.Amount
 
 		if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
-			allAmounts = incomeAmounts
+			if transaction.RelatedTransactionId != 0 {
+				// refund transaction offsets the expense of the original transaction
+				allAmounts = expenseAmounts
+				transactionAmount = -transactionAmount
+			} else {
+				allAmounts = incomeAmounts
+			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			allAmounts = expenseAmounts
 		}
@@ -2405,7 +2479,7 @@ func (s *TransactionService) GetAccountsDailyIncomeAndExpense(c core.Context, ui
 			amount = big.NewInt(0)
 		}
 
-		amount.Add(amount, big.NewInt(transaction.Amount))
+		amount.Add(amount, big.NewInt(transactionAmount))
 		dailyAmounts[transaction.AccountId] = amount
 		allAmounts[yearMonthDay] = dailyAmounts
 	}
@@ -2472,7 +2546,7 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 			finalConditionParams = append(finalConditionParams, "%%"+keyword+"%%")
 		}
 
-		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount").Where(finalCondition, finalConditionParams...)
+		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount, related_transaction_id").Where(finalCondition, finalConditionParams...)
 		sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 
 		err := sess.Limit(pageCountForLoadTransactionAmounts, 0).OrderBy("transaction_time desc").Find(&transactions)
@@ -2507,9 +2581,18 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 			continue
 		}
 
+		transactionType := transaction.Type
+		transactionAmount := transaction.Amount
+
+		if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME && transaction.RelatedTransactionId != 0 {
+			// refund transaction offsets the expense of the original transaction
+			transactionType = models.TRANSACTION_DB_TYPE_EXPENSE
+			transactionAmount = -transactionAmount
+		}
+
 		groupKey := fmt.Sprintf("%d_%d", transaction.CategoryId, transaction.AccountId)
 
-		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+		if transactionType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transactionType == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 			groupKey = fmt.Sprintf("%d_%d_%d_%d", transaction.CategoryId, transaction.AccountId, transaction.RelatedAccountId, transaction.Type)
 		}
 
@@ -2517,7 +2600,7 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 
 		if !exists {
 			totalAmounts = &models.TransactionTotalAmount{
-				Type:             transaction.Type,
+				Type:             transactionType,
 				CategoryId:       transaction.CategoryId,
 				AccountId:        transaction.AccountId,
 				RelatedAccountId: transaction.RelatedAccountId,
@@ -2527,7 +2610,7 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 			transactionTotalAmountsMap[groupKey] = totalAmounts
 		}
 
-		totalAmounts.Amount.Add(totalAmounts.Amount, big.NewInt(transaction.Amount))
+		totalAmounts.Amount.Add(totalAmounts.Amount, big.NewInt(transactionAmount))
 	}
 
 	transactionTotalAmounts := make([]*models.TransactionTotalAmount, 0, len(transactionTotalAmountsMap))
@@ -2603,7 +2686,7 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 			finalConditionParams = append(finalConditionParams, "%%"+keyword+"%%")
 		}
 
-		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount").Where(finalCondition, finalConditionParams...)
+		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount, related_transaction_id").Where(finalCondition, finalConditionParams...)
 		sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 
 		err := sess.Limit(pageCountForLoadTransactionAmounts, 0).OrderBy("transaction_time desc").Find(&transactions)
@@ -2641,9 +2724,18 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 			continue
 		}
 
+		transactionType := transaction.Type
+		transactionAmount := transaction.Amount
+
+		if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME && transaction.RelatedTransactionId != 0 {
+			// refund transaction offsets the expense of the original transaction
+			transactionType = models.TRANSACTION_DB_TYPE_EXPENSE
+			transactionAmount = -transactionAmount
+		}
+
 		groupKey := fmt.Sprintf("%d_%d_%d", yearMonth, transaction.CategoryId, transaction.AccountId)
 
-		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+		if transactionType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transactionType == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 			groupKey = fmt.Sprintf("%d_%d_%d_%d_%d", yearMonth, transaction.CategoryId, transaction.AccountId, transaction.RelatedAccountId, transaction.Type)
 		}
 
@@ -2651,7 +2743,7 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 
 		if !exists {
 			transactionAmounts = &models.TransactionTotalAmount{
-				Type:             transaction.Type,
+				Type:             transactionType,
 				CategoryId:       transaction.CategoryId,
 				AccountId:        transaction.AccountId,
 				RelatedAccountId: transaction.RelatedAccountId,
@@ -2661,7 +2753,7 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 			transactionsMonthlyAmountsMap[groupKey] = transactionAmounts
 		}
 
-		transactionAmounts.Amount.Add(transactionAmounts.Amount, big.NewInt(transaction.Amount))
+		transactionAmounts.Amount.Add(transactionAmounts.Amount, big.NewInt(transactionAmount))
 	}
 
 	for groupKey, transaction := range transactionsMonthlyAmountsMap {
@@ -2727,6 +2819,15 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 	if (transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN) &&
 		(transaction.Amount < 0 || transaction.RelatedAccountAmount < 0) {
 		return errs.ErrTransferTransactionAmountCannotBeLessThanZero
+	}
+
+	// Get and verify related transaction (for refund transaction)
+	if transaction.RelatedTransactionId != 0 {
+		err = s.verifyRefundTransaction(sess, transaction, 0)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	// Get and verify category
@@ -3049,7 +3150,7 @@ func (s *TransactionService) getAllTransactionsInSpecifiedDateRange(c core.Conte
 		finalConditionParams = append(finalConditionParams, minTransactionTime)
 		finalConditionParams = append(finalConditionParams, maxTransactionTime)
 
-		sess := s.UserDataDB(uid).NewSession(c).Select("type, account_id, transaction_time, timezone_utc_offset, amount").Where(condition, finalConditionParams...)
+		sess := s.UserDataDB(uid).NewSession(c).Select("type, account_id, transaction_time, timezone_utc_offset, amount, related_transaction_id").Where(condition, finalConditionParams...)
 		sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, false)
 
 		err := sess.Limit(pageCountForLoadTransactionAmounts, 0).OrderBy("transaction_time desc").Find(&transactions)
@@ -3071,7 +3172,18 @@ func (s *TransactionService) getAllTransactionsInSpecifiedDateRange(c core.Conte
 	return allTransactions, nil
 }
 
-func (s *TransactionService) buildTransactionQueryCondition(uid int64, maxTransactionTime int64, minTransactionTime int64, transactionDbType models.TransactionDbType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, amountFilter string, keyword string, matchMode core.MatchMode, noDuplicated bool) (string, []any) {
+func (s *TransactionService) buildTransactionQueryCondition(uid int64, maxTransactionTime int64, minTransactionTime int64, transactionType models.TransactionType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, amountFilter string, keyword string, matchMode core.MatchMode, noDuplicated bool) (string, []any, error) {
+	var transactionDbType models.TransactionDbType = 0
+
+	if transactionType > 0 {
+		var err error
+		transactionDbType, err = transactionType.ToTransactionDbType()
+
+		if err != nil {
+			return "", nil, err
+		}
+	}
+
 	condition := "uid=? AND deleted=?"
 	conditionParams := make([]any, 0, 16)
 	conditionParams = append(conditionParams, uid)
@@ -3102,6 +3214,14 @@ func (s *TransactionService) buildTransactionQueryCondition(uid int64, maxTransa
 	if models.TRANSACTION_DB_TYPE_MODIFY_BALANCE <= transactionDbType && transactionDbType <= models.TRANSACTION_DB_TYPE_EXPENSE {
 		condition = condition + " AND type=?"
 		conditionParams = append(conditionParams, transactionDbType)
+
+		if transactionType == models.TRANSACTION_TYPE_INCOME {
+			condition = condition + " AND related_transaction_id=?"
+			conditionParams = append(conditionParams, int64(0))
+		} else if transactionType == models.TRANSACTION_TYPE_REFUND {
+			condition = condition + " AND related_transaction_id<>?"
+			conditionParams = append(conditionParams, int64(0))
+		}
 	} else if transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 		if len(accountIds) == 0 {
 			condition = condition + " AND type=?"
@@ -3228,7 +3348,7 @@ func (s *TransactionService) buildTransactionQueryCondition(uid int64, maxTransa
 		conditionParams = append(conditionParams, "%%"+keyword+"%%")
 	}
 
-	return condition, conditionParams
+	return condition, conditionParams, nil
 }
 
 func (s *TransactionService) appendFilterTagIdsConditionToQuery(sess *xorm.Session, uid int64, maxTransactionTime int64, minTransactionTime int64, tagFilters []*models.TransactionTagFilter, noTags bool) *xorm.Session {
@@ -3458,6 +3578,68 @@ func (s *TransactionService) getRelatedUpdateColumns(updateCols []string) []stri
 	return relatedUpdateCols
 }
 
+// verifyRefundTransaction verifies whether the refund transaction and the related transaction are valid
+func (s *TransactionService) verifyRefundTransaction(sess *xorm.Session, transaction *models.Transaction, excludedTransactionId int64) error {
+	if transaction.Type != models.TRANSACTION_DB_TYPE_INCOME {
+		return errs.ErrTransactionTypeInvalid
+	}
+
+	relatedTransaction := &models.Transaction{}
+	has, err := sess.ID(transaction.RelatedTransactionId).Where("uid=? AND deleted=?", transaction.Uid, false).Get(relatedTransaction)
+
+	if err != nil {
+		return err
+	} else if !has {
+		return errs.ErrRelatedTransactionNotFound
+	}
+
+	if relatedTransaction.Type != models.TRANSACTION_DB_TYPE_EXPENSE {
+		return errs.ErrCannotRefundNonExpenseTransaction
+	}
+
+	if transaction.Amount < 0 {
+		return errs.ErrAmountInvalid
+	}
+
+	refundedAmount, err := s.getRefundedAmountByTransactionId(sess, transaction.Uid, relatedTransaction.TransactionId, excludedTransactionId)
+
+	if err != nil {
+		return err
+	}
+
+	refundableAmount, ok := utils.SubtractInt64(relatedTransaction.Amount, refundedAmount)
+
+	if !ok || transaction.Amount > refundableAmount {
+		return errs.ErrRefundTransactionAmountExceeded
+	}
+
+	return nil
+}
+
+// getRefundedAmountByTransactionId returns total refunded amount of the given transaction
+func (s *TransactionService) getRefundedAmountByTransactionId(sess *xorm.Session, uid int64, relatedTransactionId int64, excludedTransactionId int64) (int64, error) {
+	var refundTransactions []*models.Transaction
+	querySession := sess.Cols("amount").Where("uid=? AND deleted=? AND related_transaction_id=?", uid, false, relatedTransactionId)
+
+	if excludedTransactionId > 0 {
+		querySession = querySession.And("transaction_id<>?", excludedTransactionId)
+	}
+
+	err := querySession.Find(&refundTransactions)
+
+	if err != nil {
+		return 0, err
+	}
+
+	refundedAmount := int64(0)
+
+	for i := 0; i < len(refundTransactions); i++ {
+		refundedAmount += refundTransactions[i].Amount
+	}
+
+	return refundedAmount, nil
+}
+
 func (s *TransactionService) isCategoryValid(sess *xorm.Session, transaction *models.Transaction) error {
 	if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
 		if transaction.CategoryId != 0 {
@@ -3481,8 +3663,8 @@ func (s *TransactionService) isCategoryValid(sess *xorm.Session, transaction *mo
 			return errs.ErrCannotUsePrimaryCategoryForTransaction
 		}
 
-		if (transaction.Type == models.TRANSACTION_DB_TYPE_INCOME && category.Type != models.CATEGORY_TYPE_INCOME) ||
-			(transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE && category.Type != models.CATEGORY_TYPE_EXPENSE) ||
+		if (transaction.Type == models.TRANSACTION_DB_TYPE_INCOME && transaction.RelatedTransactionId == 0 && category.Type != models.CATEGORY_TYPE_INCOME) ||
+			((transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE || (transaction.Type == models.TRANSACTION_DB_TYPE_INCOME && transaction.RelatedTransactionId != 0)) && category.Type != models.CATEGORY_TYPE_EXPENSE) ||
 			((transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN) && category.Type != models.CATEGORY_TYPE_TRANSFER) {
 			return errs.ErrTransactionCategoryTypeInvalid
 		}

@@ -30,6 +30,8 @@ export class Transaction implements TransactionInfoResponse {
     public tagIds: string[];
     public comment: string;
     public editable: boolean;
+    public relatedTransactionId: string = '0';
+    public refundedAmount: number = 0;
 
     private _pictures?: TransactionPicture[];
     private _geoLocation?: TransactionGeoLocation;
@@ -123,7 +125,7 @@ export class Transaction implements TransactionInfoResponse {
     }
 
     public getCategoryId(): string {
-        if (this.type === TransactionType.Expense) {
+        if (this.type === TransactionType.Expense || this.type === TransactionType.Refund) {
             return this.expenseCategoryId;
         } else if (this.type === TransactionType.Income) {
             return this.incomeCategoryId;
@@ -135,13 +137,26 @@ export class Transaction implements TransactionInfoResponse {
     }
 
     public setCategoryId(categoryId: string): void {
-        if (this.type === TransactionType.Expense) {
+        if (this.type === TransactionType.Expense || this.type === TransactionType.Refund) {
             this.expenseCategoryId = categoryId;
         } else if (this.type === TransactionType.Income) {
             this.incomeCategoryId = categoryId;
         } else if (this.type === TransactionType.Transfer) {
             this.transferCategoryId = categoryId;
         }
+    }
+
+    public isRefund(): boolean {
+        return this.type === TransactionType.Refund;
+    }
+
+    public getRefundableAmount(): number {
+        if (this.type !== TransactionType.Expense) {
+            return 0;
+        }
+
+        const refundableAmount = this.sourceAmount - this.refundedAmount;
+        return refundableAmount > 0 ? refundableAmount : 0;
     }
 
     public setCategory(category?: TransactionCategory): void {
@@ -240,6 +255,7 @@ export class Transaction implements TransactionInfoResponse {
             destinationAccountId: this.type === TransactionType.Transfer ? this.destinationAccountId : '0',
             sourceAmount: this.sourceAmount,
             destinationAmount: this.type === TransactionType.Transfer ? this.destinationAmount : 0,
+            relatedTransactionId: this.type === TransactionType.Refund ? this.relatedTransactionId : '0',
             hideAmount: this.hideAmount,
             tagIds: this.tagIds,
             pictureIds: this.getPictureIds(),
@@ -333,6 +349,9 @@ export class Transaction implements TransactionInfoResponse {
             transactionResponse.comment,
             transactionResponse.editable
         );
+
+        transaction.relatedTransactionId = transactionResponse.relatedTransactionId ?? '0';
+        transaction.refundedAmount = transactionResponse.refundedAmount ?? 0;
 
         if (transactionResponse.category) {
             transaction.setCategory(TransactionCategory.of(transactionResponse.category));
@@ -539,6 +558,7 @@ export interface TransactionCreateRequest {
     readonly destinationAccountId: string;
     readonly sourceAmount: number;
     readonly destinationAmount: number;
+    readonly relatedTransactionId?: string;
     readonly hideAmount: boolean;
     readonly tagIds: string[];
     readonly pictureIds: string[];
@@ -667,6 +687,8 @@ export interface TransactionInfoResponse {
     readonly destinationAccount?: AccountInfoResponse;
     readonly sourceAmount: number;
     readonly destinationAmount: number;
+    readonly relatedTransactionId?: string;
+    readonly refundedAmount?: number;
     readonly hideAmount: boolean;
     readonly tagIds: string[];
     readonly tags?: TransactionTagInfoResponse[];

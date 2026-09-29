@@ -240,6 +240,8 @@ export function useReconciliationStatementPageBase() {
             return tt('Transfer Out');
         } else if (transaction.type === TransactionType.Transfer) {
             return tt('Transfer');
+        } else if (transaction.type === TransactionType.Refund) {
+            return tt('Refund');
         } else {
             return tt('Unknown');
         }

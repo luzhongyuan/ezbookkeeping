@@ -175,7 +175,7 @@ export function setTransactionModelByTransaction(transaction: Transaction, trans
 
         transaction.type = transaction2.type;
 
-        if (transaction.type === TransactionType.Expense) {
+        if (transaction.type === TransactionType.Expense || transaction.type === TransactionType.Refund) {
             transaction.expenseCategoryId = transaction2.categoryId || '';
         } else if (transaction.type === TransactionType.Income) {
             transaction.incomeCategoryId = transaction2.categoryId || '';
@@ -210,6 +210,9 @@ export function setTransactionModelByTransaction(transaction: Transaction, trans
         transaction.setPictures(TransactionPicture.ofMulti(transaction2.pictures || []));
 
         transaction.comment = transaction2.comment;
+
+        transaction.relatedTransactionId = transaction2.relatedTransactionId;
+        transaction.refundedAmount = transaction2.refundedAmount;
 
         if (setContextData) {
             transaction.setGeoLocation(transaction2.geoLocation);

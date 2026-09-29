@@ -1139,6 +1139,10 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 	transactionTagIds := allTransactionTagIds[transaction.TransactionId]
 	transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, transactionEditable)
 
+	if err := a.fillTransactionRefundedAmounts(c, uid, transactionResp); err != nil {
+		return nil, err
+	}
+
 	if !transactionGetReq.TrimAccount {
 		if sourceAccount := accountMap[transaction.AccountId]; sourceAccount != nil {
 			transactionResp.SourceAccount = sourceAccount.ToAccountInfoResponse()
@@ -1205,9 +1209,14 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		return nil, errs.ErrTransactionHasTooManyPictures
 	}
 
-	if transactionCreateReq.Type < models.TRANSACTION_TYPE_MODIFY_BALANCE || transactionCreateReq.Type > models.TRANSACTION_TYPE_TRANSFER {
+	if transactionCreateReq.Type < models.TRANSACTION_TYPE_MODIFY_BALANCE || transactionCreateReq.Type > models.TRANSACTION_TYPE_REFUND {
 		log.Warnf(c, "[transactions.TransactionCreateHandler] transaction type is invalid")
 		return nil, errs.ErrTransactionTypeInvalid
+	}
+
+	if transactionCreateReq.Type == models.TRANSACTION_TYPE_REFUND && transactionCreateReq.RelatedTransactionId <= 0 {
+		log.Warnf(c, "[transactions.TransactionCreateHandler] refund transaction must set related transaction id")
+		return nil, errs.ErrRelatedTransactionNotFound
 	}
 
 	if transactionCreateReq.Type == models.TRANSACTION_TYPE_MODIFY_BALANCE && transactionCreateReq.CategoryId != 0 {
@@ -1288,6 +1297,11 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 				}
 
 				transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
+
+				if err := a.fillTransactionRefundedAmounts(c, uid, transactionResp); err != nil {
+					return nil, err
+				}
+
 				transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 
 				return transactionResp, nil
@@ -1306,6 +1320,11 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
 	transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
+
+	if err := a.fillTransactionRefundedAmounts(c, uid, transactionResp); err != nil {
+		return nil, err
+	}
+
 	transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 
 	return transactionResp, nil
@@ -1528,6 +1547,11 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	log.Infof(c, "[transactions.TransactionModifyHandler] user \"uid:%d\" has updated transaction \"id:%d\" successfully", uid, transactionModifyReq.Id)
 
 	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, transactionEditable)
+
+	if err := a.fillTransactionRefundedAmounts(c, uid, newTransactionResp); err != nil {
+		return nil, err
+	}
+
 	newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos)
 
 	return newTransactionResp, nil
@@ -1609,7 +1633,13 @@ func (a *TransactionsApi) TransactionBatchUpdateCategoriesHandler(c *core.WebCon
 	for i := 0; i < len(transactions); i++ {
 		transaction := transactions[i]
 
-		if transaction.Type != expectedTransactionType {
+		transactionDbType := transaction.Type
+
+		if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME && transaction.RelatedTransactionId != 0 {
+			transactionDbType = models.TRANSACTION_DB_TYPE_EXPENSE // refund transaction uses expense category
+		}
+
+		if transactionDbType != expectedTransactionType {
 			log.Warnf(c, "[transactions.TransactionBatchUpdateCategoriesHandler] transaction \"id:%d\" type is not expected type \"%d\" for user \"uid:%d\"", transaction.TransactionId, expectedTransactionType, uid)
 			return nil, errs.ErrTransactionTypeInvalid
 		}
@@ -3138,7 +3168,37 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 
 	sort.Sort(result)
 
+	if err := a.fillTransactionRefundedAmounts(c, user.Uid, result...); err != nil {
+		return nil, err
+	}
+
 	return result, nil
+}
+
+// fillTransactionRefundedAmounts fills the refunded amount of the given transaction responses
+func (a *TransactionsApi) fillTransactionRefundedAmounts(c *core.WebContext, uid int64, transactionResponses ...*models.TransactionInfoResponse) *errs.Error {
+	if len(transactionResponses) <= 0 {
+		return nil
+	}
+
+	transactionIds := make([]int64, 0, len(transactionResponses))
+
+	for i := 0; i < len(transactionResponses); i++ {
+		transactionIds = append(transactionIds, transactionResponses[i].Id)
+	}
+
+	refundedAmounts, err := a.transactions.GetRefundedAmountsByTransactionIds(c, uid, transactionIds)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.fillTransactionRefundedAmounts] failed to get refunded amounts for user \"uid:%d\", because %s", uid, err.Error())
+		return errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	for i := 0; i < len(transactionResponses); i++ {
+		transactionResponses[i].RefundedAmount = refundedAmounts[transactionResponses[i].Id]
+	}
+
+	return nil
 }
 
 func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreateReq *models.TransactionCreateRequest, clientIp string) *models.Transaction {
@@ -3148,7 +3208,7 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 		transactionDbType = models.TRANSACTION_DB_TYPE_MODIFY_BALANCE
 	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_EXPENSE {
 		transactionDbType = models.TRANSACTION_DB_TYPE_EXPENSE
-	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_INCOME {
+	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_INCOME || transactionCreateReq.Type == models.TRANSACTION_TYPE_REFUND {
 		transactionDbType = models.TRANSACTION_DB_TYPE_INCOME
 	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_TRANSFER {
 		transactionDbType = models.TRANSACTION_DB_TYPE_TRANSFER_OUT
@@ -3170,6 +3230,10 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 	if transactionCreateReq.Type == models.TRANSACTION_TYPE_TRANSFER {
 		transaction.RelatedAccountId = transactionCreateReq.DestinationAccountId
 		transaction.RelatedAccountAmount = transactionCreateReq.DestinationAmount
+	}
+
+	if transactionCreateReq.Type == models.TRANSACTION_TYPE_REFUND {
+		transaction.RelatedTransactionId = transactionCreateReq.RelatedTransactionId
 	}
 
 	if transactionCreateReq.GeoLocation != nil {

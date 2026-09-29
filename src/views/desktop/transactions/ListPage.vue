@@ -23,7 +23,8 @@
                         { displayName: tt('Modify Balance'), type: 1 },
                         { displayName: tt('Income'), type: 2 },
                         { displayName: tt('Expense'), type: 3 },
-                        { displayName: tt('Transfer'), type: 4 }
+                        { displayName: tt('Transfer'), type: 4 },
+                        { displayName: tt('Refund'), type: 5 }
                     ]"
                     v-model="queryType"
                 />
@@ -576,9 +577,13 @@
                                             <span class="ms-1" v-else-if="transaction.type !== TransactionType.ModifyBalance && !transaction.category">
                                                 {{ getTransactionTypeName(transaction.type, 'Transaction') }}
                                             </span>
+                                            <v-chip class="ms-1" color="default" size="x-small"
+                                                    v-if="transaction.type === TransactionType.Refund">
+                                                {{ tt('Refund') }}
+                                            </v-chip>
                                         </div>
                                     </td>
-                                    <td class="transaction-table-column-amount" :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
+                                    <td class="transaction-table-column-amount" :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income || transaction.type === TransactionType.Refund }">
                                         <div v-if="transaction.sourceAccount">
                                             <span>{{ getDisplayAmount(transaction) }}</span>
                                             <v-tooltip activator="parent" v-if="!transaction.hideAmount && getDisplayAmountCurrency(transaction) !== userDefaultCurrency">
@@ -953,7 +958,7 @@ const allTransactionTemplates = computed<TransactionTemplate[]>(() => {
 });
 
 const allowCategoryTypes = computed<string>(() => {
-    if (TransactionType.Income <= query.value.type && query.value.type <= TransactionType.Transfer) {
+    if (TransactionType.Income <= query.value.type && query.value.type <= TransactionType.Refund) {
         return transactionTypeToCategoryType(query.value.type)?.toString() ?? '';
     }
 

@@ -212,6 +212,8 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
             return 'Income Amount';
         } else if (transaction.value.type === TransactionType.Transfer) {
             return 'Transfer Out Amount';
+        } else if (transaction.value.type === TransactionType.Refund) {
+            return 'Refund Amount';
         } else {
             return 'Amount';
         }
@@ -345,7 +347,7 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
     });
 
     const inputEmptyProblemMessage = computed<string | null>(() => {
-        if (transaction.value.type === TransactionType.Expense) {
+        if (transaction.value.type === TransactionType.Expense || transaction.value.type === TransactionType.Refund) {
             if (!transaction.value.expenseCategoryId || transaction.value.expenseCategoryId === '') {
                 return 'Transaction category cannot be blank';
             }

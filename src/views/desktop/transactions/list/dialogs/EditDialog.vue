@@ -70,17 +70,20 @@
                 <div class="px-4">
                     <v-tabs class="v-tabs-pill" direction="vertical" :class="{ 'readonly': type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit }"
                             :disabled="loading || submitting || recognizing" v-model="transaction.type">
-                        <v-tab :value="TransactionType.Expense" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Expense" v-if="transaction.type !== TransactionType.ModifyBalance">
+                        <v-tab :value="TransactionType.Expense" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Expense" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund">
                             <span>{{ tt('Expense') }}</span>
                         </v-tab>
-                        <v-tab :value="TransactionType.Income" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Income" v-if="transaction.type !== TransactionType.ModifyBalance">
+                        <v-tab :value="TransactionType.Income" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Income" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund">
                             <span>{{ tt('Income') }}</span>
                         </v-tab>
-                        <v-tab :value="TransactionType.Transfer" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Transfer" v-if="transaction.type !== TransactionType.ModifyBalance">
+                        <v-tab :value="TransactionType.Transfer" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Transfer" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund">
                             <span>{{ tt('Transfer') }}</span>
                         </v-tab>
                         <v-tab :value="TransactionType.ModifyBalance" v-if="type === TransactionEditPageType.Transaction && transaction.type === TransactionType.ModifyBalance">
                             <span>{{ tt('Modify Balance') }}</span>
+                        </v-tab>
+                        <v-tab :value="TransactionType.Refund" v-if="type === TransactionEditPageType.Transaction && transaction.type === TransactionType.Refund">
+                            <span>{{ tt('Refund') }}</span>
                         </v-tab>
                     </v-tabs>
                 </div>
@@ -131,6 +134,11 @@
                                                   :enable-formula="mode !== TransactionEditPageMode.View"
                                                   v-model="transaction.sourceAmount"/>
                                 </v-col>
+                                <v-col cols="12" v-if="showRefundedAmount">
+                                    <div class="text-body-small text-medium-emphasis">
+                                        {{ tt('Refunded Amount') }}: {{ getDisplayAmount(parseBigDecimal(transaction.refundedAmount), transaction.hideAmount, sourceAccountCurrency) }}
+                                    </div>
+                                </v-col>
                                 <v-col cols="12" :md="6" v-if="transaction.type === TransactionType.Transfer">
                                     <amount-input class="transaction-edit-amount font-weight-bold" color="primary"
                                                   :currency="destinationAccountCurrency"
@@ -144,7 +152,7 @@
                                                   :enable-formula="mode !== TransactionEditPageMode.View"
                                                   v-model="transaction.destinationAmount"/>
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Expense">
+                                <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Expense || transaction.type === TransactionType.Refund">
                                     <v-tooltip :disabled="hasVisibleExpenseCategories" :text="hasVisibleExpenseCategories ? '' : tt('No secondary expense categories are available')">
                                         <template v-slot:activator="{ props }">
                                             <div v-bind="props" class="d-block">
@@ -454,6 +462,10 @@
                         </div>
                     </template>
                 </v-tooltip>
+                <v-btn color="primary" variant="tonal" :disabled="loading || submitting || recognizing"
+                       v-if="mode === TransactionEditPageMode.View && canRefund" @click="refund">
+                    {{ tt('Refund') }}
+                </v-btn>
                 <v-btn-group variant="tonal" density="comfortable"
                              v-if="mode === TransactionEditPageMode.View && transaction.type !== TransactionType.ModifyBalance">
                     <v-btn :disabled="loading || submitting || recognizing"
@@ -546,6 +558,7 @@ import {
     getTimezoneOffsetMinutes,
     getCurrentUnixTime
 } from '@/lib/datetime.ts';
+import { parseBigDecimal } from '@/lib/numeral.ts';
 import { formatCoordinate } from '@/lib/coordinate.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
 import {
@@ -657,6 +670,7 @@ const {
     updateTransactionTime,
     updateTransactionTimezone,
     swapTransactionData,
+    getDisplayAmount,
     getTransactionPictureUrl
 } = useTransactionEditPageBase(props.type);
 
@@ -692,13 +706,24 @@ const initOptions = ref<TransactionEditOptions | undefined>(undefined);
 const sourceAmountColor = computed<string | undefined>(() => {
     if (transaction.value.type === TransactionType.Expense) {
         return 'expense';
-    } else if (transaction.value.type === TransactionType.Income) {
+    } else if (transaction.value.type === TransactionType.Income || transaction.value.type === TransactionType.Refund) {
         return 'income';
     } else if (transaction.value.type === TransactionType.Transfer) {
         return 'primary';
     }
 
     return undefined;
+});
+
+const canRefund = computed<boolean>(() => {
+    return mode.value === TransactionEditPageMode.View
+        && props.type === TransactionEditPageType.Transaction
+        && transaction.value.type === TransactionType.Expense
+        && transaction.value.getRefundableAmount() > 0;
+});
+
+const showRefundedAmount = computed<boolean>(() => {
+    return transaction.value.type === TransactionType.Expense && transaction.value.refundedAmount > 0;
 });
 
 const isTransactionModified = computed<boolean>(() => {
@@ -1079,6 +1104,36 @@ function edit(): void {
     }
 
     mode.value = TransactionEditPageMode.Edit;
+}
+
+function refund(): void {
+    if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
+        return;
+    }
+
+    const refundableAmount = transaction.value.getRefundableAmount();
+
+    if (transaction.value.type !== TransactionType.Expense || refundableAmount <= 0) {
+        return;
+    }
+
+    editId.value = null;
+    duplicateFromId.value = transaction.value.id;
+    clientSessionId.value = generateRandomUUID();
+    submitted.value = false;
+    activeTab.value = 'basicInfo';
+    transaction.value.relatedTransactionId = transaction.value.id;
+    transaction.value.refundedAmount = 0;
+    transaction.value.id = '';
+    transaction.value.type = TransactionType.Refund;
+    transaction.value.sourceAmount = refundableAmount;
+    transaction.value.destinationAmount = refundableAmount;
+    transaction.value.time = getCurrentUnixTime();
+    transaction.value.timeZone = settingsStore.appSettings.timeZone;
+    transaction.value.utcOffset = getTimezoneOffsetMinutes(transaction.value.time, transaction.value.timeZone);
+    transaction.value.removeGeoLocation();
+    transaction.value.clearPictures();
+    mode.value = TransactionEditPageMode.Add;
 }
 
 function remove(): void {
