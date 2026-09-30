@@ -70,19 +70,24 @@
                 <div class="px-4">
                     <v-tabs class="v-tabs-pill" direction="vertical" :class="{ 'readonly': type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit }"
                             :disabled="loading || submitting || recognizing" v-model="transaction.type">
-                        <v-tab :value="TransactionType.Expense" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Expense" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund">
+                        <v-tab :value="TransactionType.Expense" :disabled="isTransactionTypeTabDisabled(TransactionType.Expense)" v-show="isTransactionTypeTabVisible(TransactionType.Expense)">
                             <span>{{ tt('Expense') }}</span>
                         </v-tab>
-                        <v-tab :value="TransactionType.Income" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Income" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund">
+                        <v-tab :value="TransactionType.Income" :disabled="isTransactionTypeTabDisabled(TransactionType.Income)" v-show="isTransactionTypeTabVisible(TransactionType.Income)">
                             <span>{{ tt('Income') }}</span>
                         </v-tab>
-                        <v-tab :value="TransactionType.Transfer" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && transaction.type !== TransactionType.Transfer" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Refund">
+                        <v-tab :value="TransactionType.Transfer" :disabled="isTransactionTypeTabDisabled(TransactionType.Transfer)" v-show="isTransactionTypeTabVisible(TransactionType.Transfer)">
                             <span>{{ tt('Transfer') }}</span>
                         </v-tab>
-                        <v-tab :value="TransactionType.ModifyBalance" v-if="type === TransactionEditPageType.Transaction && transaction.type === TransactionType.ModifyBalance">
+                        <!-- every tab must always be registered in the tab group, only its display and its disabled state may
+                             depend on the current transaction type, otherwise the tab group would report the first available
+                             transaction type back to "transaction.type" as soon as the current transaction type becomes a
+                             refund or a balance modification, and the tab group and the transaction type would keep changing
+                             each other endlessly -->
+                        <v-tab :value="TransactionType.ModifyBalance" :disabled="!isTransactionTypeTabVisible(TransactionType.ModifyBalance)" v-show="isTransactionTypeTabVisible(TransactionType.ModifyBalance)">
                             <span>{{ tt('Modify Balance') }}</span>
                         </v-tab>
-                        <v-tab :value="TransactionType.Refund" v-if="type === TransactionEditPageType.Transaction && transaction.type === TransactionType.Refund">
+                        <v-tab :value="TransactionType.Refund" :disabled="!isTransactionTypeTabVisible(TransactionType.Refund)" v-show="isTransactionTypeTabVisible(TransactionType.Refund)">
                             <span>{{ tt('Refund') }}</span>
                         </v-tab>
                     </v-tabs>
@@ -1147,6 +1152,33 @@ function edit(): void {
     }
 
     mode.value = TransactionEditPageMode.Edit;
+}
+
+function isStandardTransactionType(transactionType: number): boolean {
+    return TransactionType.Income <= transactionType && transactionType <= TransactionType.Transfer;
+}
+
+function isTransactionTypeTabVisible(transactionType: number): boolean {
+    if (transaction.value.type === transactionType) {
+        return true;
+    }
+
+    // the tabs of the standard transaction types are always displayed together
+    return isStandardTransactionType(transaction.value.type) && isStandardTransactionType(transactionType);
+}
+
+function isTransactionTypeTabDisabled(transactionType: number): boolean {
+    if (!isTransactionTypeTabVisible(transactionType)) {
+        // a refund transaction always refers to the original expense transaction, and the transaction type of a refund
+        // or a balance modification transaction cannot be changed
+        return true;
+    }
+
+    // the transaction type can only be changed when the transaction is being added or edited
+    return props.type === TransactionEditPageType.Transaction
+        && mode.value !== TransactionEditPageMode.Add
+        && mode.value !== TransactionEditPageMode.Edit
+        && transaction.value.type !== transactionType;
 }
 
 function openRelatedTransaction(transactionId: string): void {
