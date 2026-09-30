@@ -2204,6 +2204,8 @@
     "No Location": "Không có vị trí",
     "Getting Location...": "Đang lấy vị trí...",
     "Show on the map": "Hiển thị trên bản đồ",
+    "Search places": "Tìm kiếm địa điểm",
+    "Failed to search places": "Tìm kiếm địa điểm thất bại",
     "Location on Map": "Vị trí trên bản đồ",
     "Update Geographic Location": "Cập nhật vị trí địa lý",
     "Clear Geographic Location": "Xóa vị trí địa lý",

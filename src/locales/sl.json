@@ -2204,6 +2204,8 @@
     "No Location": "Ni lokacije",
     "Getting Location...": "Pridobivanje lokacije...",
     "Show on the map": "Prikaži na zemljevidu",
+    "Search places": "Iskanje krajev",
+    "Failed to search places": "Iskanje krajev ni uspelo",
     "Location on Map": "Lokacija na zemljevidu",
     "Update Geographic Location": "Posodobi geografsko lokacijo",
     "Clear Geographic Location": "Počisti geografsko lokacijo",

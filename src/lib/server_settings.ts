@@ -118,14 +118,6 @@ export function getTianDiTuMapAPIKey(): string {
     return getServerSetting('tdak') as string;
 }
 
-export function getGoogleMapAPIKey(): string {
-    return getServerSetting('gmak') as string;
-}
-
-export function getBaiduMapAK(): string {
-    return getServerSetting('bmak') as string;
-}
-
 export function getAmapApplicationKey(): string {
     return getServerSetting('amak') as string;
 }

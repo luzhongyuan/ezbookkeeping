@@ -1,8 +1,19 @@
 import type { Coordinate } from '@/core/coordinate.ts';
 
+export interface MapPlace {
+    readonly name: string;
+    readonly address?: string;
+    readonly province?: string;
+    readonly city?: string;
+    readonly district?: string;
+    readonly latitude: number;
+    readonly longitude: number;
+}
+
 export interface MapProvider {
     getWebsite(): string;
     isSupportGetGeoLocationByClick(): boolean;
+    isSupportSearchPlaces(): boolean;
     asyncLoadAssets(language?: string): Promise<unknown>;
     createMapInstance(options: MapCreateOptions): MapInstance | null;
 }
@@ -18,12 +29,14 @@ export interface MapInstance {
     setMapCenterTo(center: Coordinate, zoomLevel: number): void;
     setMapCenterMarker(position: Coordinate): void;
     removeMapCenterMarker(): void;
+    searchPlaces(keyword: string): Promise<MapPlace[]>;
     zoomIn(): void;
     zoomOut(): void;
 }
 
 export interface MapCreateOptions {
     readonly enableZoomControl?: boolean;
+    readonly zoomControlPosition?: 'top' | 'bottom';
 }
 
 export interface MapInstanceInitOptions {

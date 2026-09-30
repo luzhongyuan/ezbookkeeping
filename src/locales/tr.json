@@ -2204,6 +2204,8 @@
     "No Location": "Konum Yok",
     "Getting Location...": "Konum Alınıyor...",
     "Show on the map": "Haritada göster",
+    "Search places": "Yer ara",
+    "Failed to search places": "Yer arama başarısız",
     "Location on Map": "Haritadaki Konum",
     "Update Geographic Location": "Coğrafi Konumu Güncelle",
     "Clear Geographic Location": "Coğrafi Konumu Temizle",

@@ -351,7 +351,7 @@
                 class="list-item-with-header-and-title list-item-title-hide-overflow"
                 :class="{ 'readonly': mode === TransactionEditPageMode.View && !transaction.geoLocation }"
                 :header="tt('Geographic Location')"
-                @click="showGeoLocationActionSheet = true"
+                @click="openGeoLocationMapSheet"
                 v-if="pageTypeAndMode?.type === TransactionEditPageType.Transaction"
             >
                 <template #title>
@@ -364,7 +364,9 @@
                 <map-sheet :readonly="mode === TransactionEditPageMode.View"
                            v-model="transaction.geoLocation"
                            v-model:set-geo-location-by-click-map="setGeoLocationByClickMap"
-                           v-model:show="showGeoLocationMapSheet">
+                           v-model:show="showGeoLocationMapSheet"
+                           @update-geo-location="updateGeoLocation(true)"
+                           @clear-geo-location="clearGeoLocation">
                 </map-sheet>
             </f7-list-item>
 
@@ -454,9 +456,6 @@
             <f7-actions-group>
                 <f7-actions-button v-if="mode !== TransactionEditPageMode.View" @click="updateGeoLocation(true)">{{ tt('Update Geographic Location') }}</f7-actions-button>
                 <f7-actions-button v-if="mode !== TransactionEditPageMode.View" @click="clearGeoLocation">{{ tt('Clear Geographic Location') }}</f7-actions-button>
-            </f7-actions-group>
-            <f7-actions-group v-if="!!getMapProvider()">
-                <f7-actions-button :class="{ 'disabled': !transaction.geoLocation }" @click="setGeoLocationByClickMap = false; showGeoLocationMapSheet = true">{{ tt('Show on the map') }}</f7-actions-button>
             </f7-actions-group>
             <f7-actions-group>
                 <f7-actions-button bold close>{{ tt('Cancel') }}</f7-actions-button>
@@ -586,6 +585,7 @@ import {
     isTransactionPicturesEnabled,
     getMapProvider
 } from '@/lib/server_settings.ts';
+import { isSupportGetGeoLocationByClick } from '@/lib/map/index.ts';
 import { compressJpgImageByQuality } from '@/lib/ui/common.ts';
 import logger from '@/lib/logger.ts';
 
@@ -1387,6 +1387,23 @@ function updateGeoLocation(forceUpdate: boolean): void {
 function clearGeoLocation(): void {
     geoLocationStatus.value = null;
     transaction.value.removeGeoLocation();
+}
+
+function openGeoLocationMapSheet(): void {
+    if (mode.value === TransactionEditPageMode.View && !transaction.value.geoLocation) {
+        return;
+    }
+
+    if (!getMapProvider()) {
+        showGeoLocationActionSheet.value = true;
+        return;
+    }
+
+    if (mode.value !== TransactionEditPageMode.View && isSupportGetGeoLocationByClick()) {
+        setGeoLocationByClickMap.value = true;
+    }
+
+    showGeoLocationMapSheet.value = true;
 }
 
 function showDateTimeDialog(sheetMode: string): void {

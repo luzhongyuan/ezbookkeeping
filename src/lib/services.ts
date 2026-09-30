@@ -27,8 +27,6 @@ import {
     DEFAULT_BATCH_UPDATE_TRANSACTIONS_API_TIMEOUT,
     DEFAULT_CLEAR_ALL_TRANSACTIONS_API_TIMEOUT,
     DEFAULT_LLM_API_TIMEOUT,
-    GOOGLE_MAP_JAVASCRIPT_URL,
-    BAIDU_MAP_JAVASCRIPT_URL,
     AMAP_JAVASCRIPT_URL
 } from '@/consts/api.ts';
 
@@ -201,8 +199,6 @@ import {
     getTimeZone
 } from './settings.ts';
 import {
-    getGoogleMapAPIKey,
-    getBaiduMapAK,
     getAmapApplicationKey,
     getExchangeRatesRequestTimeout
 } from './server_settings.ts';
@@ -950,40 +946,8 @@ export default {
             `.*${BASE_PROXY_URL_PATH}/map/annotation/[^/]+/[^/]+/[^/]+\\.png\\?provider=[^&]+.*$`
         ];
     },
-    generateMapProxyTileImageUrl: (mapProvider: string, language: string): string => {
-        const token = getCurrentToken();
-        let url = `${getBasePath()}${BASE_PROXY_URL_PATH}/map/tile/{z}/{x}/{y}.png?provider=${mapProvider}&token=${token}`;
-
-        if (language) {
-            url = url + `&language=${language}`;
-        }
-
-        return url;
-    },
-    generateMapProxyAnnotationImageUrl: (mapProvider: string, language: string): string => {
-        const token = getCurrentToken();
-        let url = `${getBasePath()}${BASE_PROXY_URL_PATH}/map/annotation/{z}/{x}/{y}.png?provider=${mapProvider}&token=${token}`;
-
-        if (language) {
-            url = url + `&language=${language}`;
-        }
-
-        return url;
-    },
-    generateGoogleMapJavascriptUrl: (language: string | undefined, callbackFnName: string): string => {
-        let url = `${GOOGLE_MAP_JAVASCRIPT_URL}?key=${getGoogleMapAPIKey()}&libraries=core,marker&callback=${callbackFnName}`;
-
-        if (language) {
-            url = url + `&language=${language}`;
-        }
-
-        return url;
-    },
-    generateBaiduMapJavascriptUrl: (callbackFnName: string): string => {
-        return `${BAIDU_MAP_JAVASCRIPT_URL}&ak=${getBaiduMapAK()}&callback=${callbackFnName}`;
-    },
     generateAmapJavascriptUrl: (callbackFnName: string): string => {
-        return `${AMAP_JAVASCRIPT_URL}&key=${getAmapApplicationKey()}&plugin=AMap.ToolBar&callback=${callbackFnName}`;
+        return `${AMAP_JAVASCRIPT_URL}&key=${getAmapApplicationKey()}&plugin=AMap.ToolBar,AMap.PlaceSearch&callback=${callbackFnName}`;
     },
     generateAmapApiInternalProxyUrl: (): string => {
         return `${window.location.origin}${getBasePath()}${BASE_AMAP_API_PROXY_URL_PATH}`;

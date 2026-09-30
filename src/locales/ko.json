@@ -2204,6 +2204,8 @@
     "No Location": "위치 없음",
     "Getting Location...": "위치 가져오는 중...",
     "Show on the map": "지도에 표시",
+    "Search places": "장소 검색",
+    "Failed to search places": "장소 검색 실패",
     "Location on Map": "지도상의 위치",
     "Update Geographic Location": "지리적 위치 업데이트",
     "Clear Geographic Location": "지리적 위치 지우기",

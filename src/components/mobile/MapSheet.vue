@@ -8,14 +8,18 @@
                 <f7-link icon-f7="plus" :class="{ 'disabled': !map?.allowZoomIn() }" :aria-label="tt('Zoom in')" @click="map?.zoomIn()"></f7-link>
             </div>
             <div class="right map-sheet-toolbar-right">
+                <f7-link icon-f7="location_fill" :aria-label="tt('Update Geographic Location')"
+                         v-if="!readonly" @click="updateGeoLocationByGPS"></f7-link>
+                <f7-link icon-f7="trash" :aria-label="tt('Clear Geographic Location')"
+                         v-if="!readonly && geoLocation" @click="clearGeoLocation"></f7-link>
                 <f7-link :text="tt('Disable Click to Set Location')" @click="switchSetGeoLocationByClickMap(false)" v-if="!readonly && isSupportGetGeoLocationByClick() && props.setGeoLocationByClickMap"></f7-link>
                 <f7-link class="map-sheet-toolbar-auto-hidden" :text="tt('Enable Click to Set Location')" @click="switchSetGeoLocationByClickMap(true)" v-if="!readonly && isSupportGetGeoLocationByClick() && !props.setGeoLocationByClickMap"></f7-link>
             </div>
         </f7-toolbar>
         <f7-page-content class="no-margin no-padding">
             <map-view ref="map" height="var(--ebk-map-sheet-height)"
-                      :enable-zoom-control="false" :geo-location="geoLocation"
-                      @click="updateSpecifiedGeoLocation">
+                      :enable-zoom-control="false" :enable-search="true" :locate-current-position="true" :geo-location="geoLocation"
+                      @click="updateSpecifiedGeoLocation" @select="selectGeoLocation">
                 <template #error-title="{ mapSupported, mapDependencyLoaded }">
                     <div class="display-flex map-sheet-error-title padding justify-content-space-between align-items-center">
                         <div class="ebk-sheet-title" v-if="!mapSupported"><b>{{ tt('Unsupported Map Provider') }}</b></div>
@@ -37,12 +41,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue';
+import { computed, ref, useTemplateRef, watch } from 'vue';
 import MapView from '@/components/common/MapView.vue';
 
 import { useI18n } from '@/locales/helpers.ts';
 
 import type { Coordinate } from '@/core/coordinate.ts';
+import type { MapPlace } from '@/lib/map/base.ts';
 
 import { isSupportGetGeoLocationByClick } from '@/lib/map/index.ts';
 
@@ -59,11 +64,14 @@ const emit = defineEmits<{
     (e: 'update:modelValue', value: Coordinate | undefined): void;
     (e: 'update:setGeoLocationByClickMap', value: boolean): void;
     (e: 'update:show', value: boolean): void;
+    (e: 'update-geo-location'): void;
+    (e: 'clear-geo-location'): void;
 }>();
 
 const { tt } = useI18n();
 
 const map = useTemplateRef<MapViewType>('map');
+const lastEmittedCoordinate = ref<Coordinate | undefined>(undefined);
 
 const geoLocation = computed<Coordinate | undefined>({
     get: () => {
@@ -76,9 +84,32 @@ const geoLocation = computed<Coordinate | undefined>({
 
 function updateSpecifiedGeoLocation(coordinate: Coordinate): void {
     if (!props.readonly && isSupportGetGeoLocationByClick() && props.setGeoLocationByClickMap) {
+        lastEmittedCoordinate.value = coordinate;
         geoLocation.value = coordinate;
         map.value?.setMarkerPosition(coordinate);
     }
+}
+
+function selectGeoLocation(place: MapPlace): void {
+    if (props.readonly) {
+        return;
+    }
+
+    const coordinate: Coordinate = {
+        latitude: place.latitude,
+        longitude: place.longitude
+    };
+
+    lastEmittedCoordinate.value = coordinate;
+    geoLocation.value = coordinate;
+}
+
+function updateGeoLocationByGPS(): void {
+    emit('update-geo-location');
+}
+
+function clearGeoLocation(): void {
+    emit('clear-geo-location');
 }
 
 function switchSetGeoLocationByClickMap(value: boolean): void {
@@ -98,6 +129,20 @@ function onSheetOpen(): void {
 function onSheetClosed(): void {
     close();
 }
+
+watch(() => props.modelValue, newValue => {
+    if (!props.show) {
+        return;
+    }
+
+    if (!newValue) {
+        map.value?.removeMarker();
+    } else if (newValue !== lastEmittedCoordinate.value) {
+        map.value?.initMapView();
+    }
+
+    lastEmittedCoordinate.value = undefined;
+});
 </script>
 
 <style>

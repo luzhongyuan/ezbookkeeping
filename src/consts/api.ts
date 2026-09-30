@@ -11,8 +11,6 @@ export const DEFAULT_BATCH_UPDATE_TRANSACTIONS_API_TIMEOUT: number = 1800000; //
 export const DEFAULT_CLEAR_ALL_TRANSACTIONS_API_TIMEOUT: number = 1800000; // 1800s
 export const DEFAULT_LLM_API_TIMEOUT: number = 600000; // 600s
 
-export const GOOGLE_MAP_JAVASCRIPT_URL: string = 'https://maps.googleapis.com/maps/api/js';
-export const BAIDU_MAP_JAVASCRIPT_URL: string = 'https://api.map.baidu.com/api?v=3.0';
 export const AMAP_JAVASCRIPT_URL: string = 'https://webapi.amap.com/maps?v=2.0';
 
 export enum KnownErrorCode {

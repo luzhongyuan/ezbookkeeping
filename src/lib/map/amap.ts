@@ -1,9 +1,10 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import type { Coordinate } from '@/core/coordinate.ts';
-import type { MapProvider, MapInstance, MapCreateOptions, MapInstanceInitOptions } from './base.ts';
+import type { MapProvider, MapInstance, MapCreateOptions, MapInstanceInitOptions, MapPlace } from './base.ts';
 
 import { isFunction, isArray } from '@/lib/common.ts';
+import { gcj02ToWgs84 } from '@/lib/map/coordinate.ts';
 import { asyncLoadAssets } from '@/lib/misc.ts';
 import services from '@/lib/services.ts';
 import {
@@ -12,6 +13,14 @@ import {
     getAmapApplicationSecret
 } from '@/lib/server_settings.ts';
 import logger from '@/lib/logger.ts';
+
+function parseAmapStringField(field: string | string[] | undefined): string | undefined {
+    if (isArray(field)) {
+        return field.length > 0 ? field[0] : undefined;
+    }
+
+    return field;
+}
 
 export class AmapMapProvider implements MapProvider {
     // https://lbs.amap.com/api/javascript-api-v2/documentation
@@ -22,7 +31,11 @@ export class AmapMapProvider implements MapProvider {
     }
 
     public isSupportGetGeoLocationByClick(): boolean {
-        return false;
+        return true;
+    }
+
+    public isSupportSearchPlaces(): boolean {
+        return true;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -34,11 +47,11 @@ export class AmapMapProvider implements MapProvider {
         if (!window._AMapSecurityConfig) {
             const amapSecurityConfig = {};
 
-            if (getAmapSecurityVerificationMethod() === 'internalproxy') {
+            if (getAmapSecurityVerificationMethod() === 'internal_proxy') {
                 amapSecurityConfig.serviceHost = services.generateAmapApiInternalProxyUrl();
-            } else if (getAmapSecurityVerificationMethod() === 'externalproxy') {
+            } else if (getAmapSecurityVerificationMethod() === 'external_proxy') {
                 amapSecurityConfig.serviceHost = getAmapApiExternalProxyUrl();
-            } else if (getAmapSecurityVerificationMethod() === 'plaintext') {
+            } else if (getAmapSecurityVerificationMethod() === 'plain_text') {
                 amapSecurityConfig.securityJsCode = getAmapApplicationSecret();
             }
 
@@ -93,17 +106,17 @@ export class AmapMapInstance implements MapInstance {
 
         if (this.mapCreateOptions.enableZoomControl) {
             this.amapToolbar = new AMap.ToolBar({
-                position: 'LT'
+                position: this.mapCreateOptions.zoomControlPosition === 'bottom' ? 'LB' : 'LT'
             });
             amapInstance.addControl(this.amapToolbar);
         }
 
         amapInstance.on('click', function(e) {
             if (options.onClick) {
-                options.onClick({
+                options.onClick(gcj02ToWgs84({
                     latitude: e.lnglat.lat,
                     longitude: e.lnglat.lng
-                });
+                }));
             }
         });
 
@@ -237,6 +250,58 @@ export class AmapMapInstance implements MapInstance {
 
         this.amapInstance.remove(this.amapCenterMarker);
         this.amapCenterMarker = null;
+    }
+
+    public searchPlaces(keyword: string): Promise<MapPlace[]> {
+        return new Promise<MapPlace[]>((resolve, reject) => {
+            if (!AmapMapProvider.AMap) {
+                reject(new Error('AMap is not loaded'));
+                return;
+            }
+
+            const AMap = AmapMapProvider.AMap;
+            const placeSearch = new AMap.PlaceSearch({
+                pageSize: 10,
+                pageIndex: 1
+            });
+
+            placeSearch.search(keyword, (status, result) => {
+                if (status !== 'complete' || !result || !result.poiList || !isArray(result.poiList.pois)) {
+                    if (status === 'no_data') {
+                        resolve([]);
+                        return;
+                    }
+
+                    reject(new Error('Failed to search places'));
+                    return;
+                }
+
+                const places: MapPlace[] = [];
+
+                for (const poi of result.poiList.pois) {
+                    if (!poi.location) {
+                        continue;
+                    }
+
+                    const wgs84Location = gcj02ToWgs84({
+                        latitude: poi.location.lat,
+                        longitude: poi.location.lng
+                    });
+
+                    places.push({
+                        name: parseAmapStringField(poi.name),
+                        address: parseAmapStringField(poi.address),
+                        province: parseAmapStringField(poi.pname),
+                        city: parseAmapStringField(poi.cityname),
+                        district: parseAmapStringField(poi.adname),
+                        latitude: wgs84Location.latitude,
+                        longitude: wgs84Location.longitude
+                    });
+                }
+
+                resolve(places);
+            });
+        });
     }
 
     public zoomIn(): void {

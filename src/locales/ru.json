@@ -2204,6 +2204,8 @@
     "No Location": "Нет местоположения",
     "Getting Location...": "Получение местоположения...",
     "Show on the map": "Показать на карте",
+    "Search places": "Поиск мест",
+    "Failed to search places": "Не удалось выполнить поиск мест",
     "Location on Map": "Местоположение на карте",
     "Update Geographic Location": "Обновить географическое местоположение",
     "Clear Geographic Location": "Очистить географическое местоположение",

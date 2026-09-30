@@ -2204,6 +2204,8 @@
     "No Location": "இடம்இல்லை",
     "Getting Location...": "இடம்வை பெறப்படுகிறது...",
     "Show on the map": "வரைபடம்இல் காட்டு",
+    "Search places": "இடங்களைத் தேடு",
+    "Failed to search places": "இடங்களைத் தேடுவதில் தோல்வி",
     "Location on Map": "வரைபடம்இலுள்ள இடம்",
     "Update Geographic Location": "புவியியல் இருப்பிடம் புதுப்பி",
     "Clear Geographic Location": "புவியியல் இருப்பிடம் நீக்கு",

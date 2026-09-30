@@ -2204,6 +2204,8 @@
     "No Location": "Nessuna posizione",
     "Getting Location...": "Recupero posizione...",
     "Show on the map": "Mostra sulla mappa",
+    "Search places": "Cerca luoghi",
+    "Failed to search places": "Ricerca dei luoghi non riuscita",
     "Location on Map": "Posizione sulla mappa",
     "Update Geographic Location": "Aggiorna posizione geografica",
     "Clear Geographic Location": "Cancella posizione geografica",

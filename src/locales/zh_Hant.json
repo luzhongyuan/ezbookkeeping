@@ -2214,6 +2214,8 @@
     "No Location": "沒有位置",
     "Getting Location...": "正在取得位置...",
     "Show on the map": "在地圖上顯示",
+    "Search places": "搜尋地點",
+    "Failed to search places": "搜尋地點失敗",
     "Location on Map": "地圖上的位置",
     "Update Geographic Location": "更新地理位置",
     "Clear Geographic Location": "清除地理位置",

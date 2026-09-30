@@ -2204,6 +2204,8 @@
     "No Location": "座標はありません",
     "Getting Location...": "座標を取得中...",
     "Show on the map": "マップに表示",
+    "Search places": "場所を検索",
+    "Failed to search places": "場所の検索に失敗しました",
     "Location on Map": "マップ上の座標",
     "Update Geographic Location": "地理座標の更新",
     "Clear Geographic Location": "地理座標を削除",

@@ -2204,6 +2204,8 @@
     "No Location": "Fără locație",
     "Getting Location...": "Se obține locația...",
     "Show on the map": "Arată pe hartă",
+    "Search places": "Caută locuri",
+    "Failed to search places": "Căutarea locurilor a eșuat",
     "Location on Map": "Locația pe hartă",
     "Update Geographic Location": "Actualizează locația geografică",
     "Clear Geographic Location": "Șterge locația geografică",

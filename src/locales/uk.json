@@ -2204,6 +2204,8 @@
     "No Location": "Немає розташування",
     "Getting Location...": "Отримання розташування...",
     "Show on the map": "Показати на карті",
+    "Search places": "Пошук місць",
+    "Failed to search places": "Не вдалося виконати пошук місць",
     "Location on Map": "Розташування на карті",
     "Update Geographic Location": "Оновити геолокацію",
     "Clear Geographic Location": "Очистити геолокацію",

@@ -2204,6 +2204,8 @@
     "No Location": "Χωρίς θέση",
     "Getting Location...": "Λήψη θέσης...",
     "Show on the map": "Εμφάνιση στον χάρτη",
+    "Search places": "Αναζήτηση τοποθεσιών",
+    "Failed to search places": "Αποτυχία αναζήτησης τοποθεσιών",
     "Location on Map": "Θέση στον χάρτη",
     "Update Geographic Location": "Ενημέρωση γεωγραφικής θέσης",
     "Clear Geographic Location": "Καθαρισμός γεωγραφικής θέσης",

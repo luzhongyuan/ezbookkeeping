@@ -353,13 +353,6 @@
         "licenseUrl": "https://github.com/moment/moment-timezone/blob/0.6.3/LICENSE"
     },
     {
-        "name": "Leaflet",
-        "copyright": "Copyright (c) 2010-2023, Volodymyr Agafonkin, Copyright (c) 2010-2011, CloudMade, All rights reserved.",
-        "url": "https://leafletjs.com/",
-        "license": "BSD 2-Clause \"Simplified\" License",
-        "licenseUrl": "https://github.com/Leaflet/Leaflet/blob/v1.9.4/LICENSE"
-    },
-    {
         "name": "Chardet",
         "copyright": "Copyright (C) 2024 Dmitry Shirokov",
         "url": "https://github.com/runk/node-chardet",

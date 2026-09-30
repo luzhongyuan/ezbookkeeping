@@ -2204,6 +2204,8 @@
     "No Location": "Geen locatie",
     "Getting Location...": "Locatie ophalen...",
     "Show on the map": "Op de kaart tonen",
+    "Search places": "Plaatsen zoeken",
+    "Failed to search places": "Zoeken naar plaatsen mislukt",
     "Location on Map": "Locatie op kaart",
     "Update Geographic Location": "Geografische locatie bijwerken",
     "Clear Geographic Location": "Geografische locatie wissen",

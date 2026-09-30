@@ -52,7 +52,7 @@
                         <v-list v-if="activeTab === 'map'">
                             <v-list-item key="setGeoLocationByClickMap" value="setGeoLocationByClickMap"
                                          :prepend-icon="mdiMapMarkerOutline"
-                                         :disabled="!transaction.geoLocation" v-if="isSupportGetGeoLocationByClick()">
+                                         v-if="isSupportGetGeoLocationByClick()">
                                 <v-list-item-title class="cursor-pointer" @click="setGeoLocationByClickMap = !setGeoLocationByClickMap; geoMenuState = false">
                                     <div class="d-flex align-center">
                                         <span>{{ tt('Click on Map to Set Geographic Location') }}</span>
@@ -93,7 +93,7 @@
                         <v-tab value="basicInfo">
                             <span>{{ tt('Basic Information') }}</span>
                         </v-tab>
-                        <v-tab value="map" :disabled="!transaction.geoLocation" v-if="type === TransactionEditPageType.Transaction && !!getMapProvider()">
+                        <v-tab value="map" :disabled="mapTabDisabled" v-if="type === TransactionEditPageType.Transaction && !!getMapProvider()">
                             <span>{{ tt('Location on Map') }}</span>
                         </v-tab>
                         <v-tab value="pictures" :disabled="mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && (!transaction.pictures || !transaction.pictures.length)" v-if="type === TransactionEditPageType.Transaction && isTransactionPicturesEnabled()">
@@ -337,8 +337,9 @@
                                         v-model:menu="geoMenuState"
                                     >
                                         <template #selection>
-                                            <span class="cursor-pointer" v-if="transaction.geoLocation">{{ `(${formatCoordinate(transaction.geoLocation, coordinateDisplayType)})` }}</span>
-                                            <span class="cursor-pointer" v-else-if="!transaction.geoLocation">{{ geoLocationStatusInfo }}</span>
+                                            <span class="cursor-pointer" v-if="transaction.geoLocation" @click.stop="openMapTab">{{ `(${formatCoordinate(transaction.geoLocation, coordinateDisplayType)})` }}</span>
+                                            <span class="cursor-pointer" v-else-if="!transaction.geoLocation && mapTabEnabled" @click.stop="openMapTab">{{ geoLocationStatusInfo }}</span>
+                                            <span v-else-if="!transaction.geoLocation">{{ geoLocationStatusInfo }}</span>
                                         </template>
 
                                         <template #no-data>
@@ -377,8 +378,9 @@
                     </v-window-item>
                     <v-window-item value="map">
                         <map-view ref="map" map-class="transaction-edit-map-view mb-3 mb-sm-0"
-                                  :enable-zoom-control="true" :geo-location="transaction.geoLocation"
-                                  @click="updateSpecifiedGeoLocation">
+                                  :enable-zoom-control="true" :enable-search="true" :locate-current-position="true"
+                                  :geo-location="transaction.geoLocation"
+                                  @click="updateSpecifiedGeoLocation" @select="selectGeoLocation">
                             <template #error-title="{ mapSupported, mapDependencyLoaded }">
                                 <span class="text-body-large" v-if="!mapSupported"><b>{{ tt('Unsupported Map Provider') }}</b></span>
                                 <span class="text-body-large" v-else-if="!mapDependencyLoaded"><b>{{ tt('Cannot Initialize Map') }}</b></span>
@@ -574,6 +576,7 @@ import {
 import {
     isSupportGetGeoLocationByClick
 } from '@/lib/map/index.ts';
+import type { MapPlace } from '@/lib/map/base.ts';
 import { compressJpgImageByQuality } from '@/lib/ui/common.ts';
 import logger from '@/lib/logger.ts';
 
@@ -724,6 +727,14 @@ const canRefund = computed<boolean>(() => {
 
 const showRefundedAmount = computed<boolean>(() => {
     return transaction.value.type === TransactionType.Expense && transaction.value.refundedAmount > 0;
+});
+
+const mapTabEnabled = computed<boolean>(() => {
+    return props.type === TransactionEditPageType.Transaction && !!getMapProvider();
+});
+
+const mapTabDisabled = computed<boolean>(() => {
+    return mode.value === TransactionEditPageMode.View && !transaction.value.geoLocation;
 });
 
 const isTransactionModified = computed<boolean>(() => {
@@ -1249,6 +1260,20 @@ function updateSpecifiedGeoLocation(coordinate: Coordinate): void {
     }
 }
 
+function openMapTab(): void {
+    geoMenuState.value = false;
+    activeTab.value = 'map';
+}
+
+function selectGeoLocation(place: MapPlace): void {
+    if (mode.value === TransactionEditPageMode.View) {
+        return;
+    }
+
+    transaction.value.setLatitudeAndLongitude(place.latitude, place.longitude);
+    map.value?.setMarkerPosition(transaction.value.geoLocation);
+}
+
 function clearGeoLocation(): void {
     geoMenuState.value = false;
     geoLocationStatus.value = null;
@@ -1346,6 +1371,10 @@ function onShowDateTimeError(error: string): void {
 
 watch(activeTab, (newValue) => {
     if (newValue === 'map') {
+        if (mode.value !== TransactionEditPageMode.View && isSupportGetGeoLocationByClick()) {
+            setGeoLocationByClickMap.value = true;
+        }
+
         nextTick(() => {
             map.value?.initMapView();
         });
