@@ -182,6 +182,10 @@ type TransactionCreateRequest struct {
 	Comment              string                         `json:"comment" binding:"max=255"`
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
 	ClientSessionId      string                         `json:"clientSessionId"`
+
+	// OriginalTransactionId is the transaction id in the imported data, it is only used to restore the relationship
+	// between a refund transaction and its related transaction when importing transactions
+	OriginalTransactionId int64 `json:"originalTransactionId,string" binding:"min=0"`
 }
 
 // TransactionModifyRequest represents all parameters of transaction modification request

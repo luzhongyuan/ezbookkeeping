@@ -121,7 +121,7 @@
                                     item-title="name"
                                     item-value="value"
                                     persistent-placeholder
-                                    :disabled="loading || !isSupportedFileCache || !fileCacheStatistics || isMapProviderUseExternalSDK() || !isMapDataFetchProxyEnabled()"
+                                    :disabled="loading || !isSupportedFileCache || !fileCacheStatistics || isMapProviderUseExternalSDK()"
                                     :label="tt('Cache Expiration for Map Data')"
                                     :placeholder="tt('Cache Expiration for Map Data')"
                                     :items="allMapCacheExpirationOptions"
@@ -160,7 +160,7 @@ import { useI18n } from '@/locales/helpers.ts';
 import { useAppBrowserCacheSettingPageBase } from '@/views/base/settings/AppBrowserCacheSettingPageBase.ts';
 
 import { isMapProviderUseExternalSDK } from '@/lib/map/index.ts';
-import { getMapProvider, isMapDataFetchProxyEnabled } from '@/lib/server_settings.ts';
+import { getMapProvider } from '@/lib/server_settings.ts';
 
 import {
     mdiRefresh,

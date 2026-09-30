@@ -5,6 +5,8 @@ import type { TransactionCreateRequest, TransactionGeoLocationResponse } from '.
 
 export class ImportTransaction implements ImportTransactionResponse {
     public type: number;
+    public originalTransactionId: string;
+    public relatedTransactionId: string;
     public categoryId: string;
     public originalCategoryName: string;
     public time: number;
@@ -31,6 +33,8 @@ export class ImportTransaction implements ImportTransactionResponse {
 
     private constructor(response: ImportTransactionResponse, index: number) {
         this.type = response.type;
+        this.originalTransactionId = response.originalTransactionId || '0';
+        this.relatedTransactionId = response.relatedTransactionId || '0';
         this.categoryId = response.categoryId;
         this.originalCategoryName = response.originalCategoryName;
         this.time = response.time;
@@ -59,6 +63,8 @@ export class ImportTransaction implements ImportTransactionResponse {
     public toCreateRequest(): TransactionCreateRequest {
         return {
             type: this.type,
+            originalTransactionId: this.originalTransactionId,
+            relatedTransactionId: this.type === TransactionType.Refund ? this.relatedTransactionId : '0',
             categoryId: this.categoryId,
             time: this.time,
             utcOffset: this.utcOffset,
@@ -85,6 +91,10 @@ export class ImportTransaction implements ImportTransactionResponse {
         }
 
         if (this.type === TransactionType.Transfer && (!this.destinationAccountId || this.destinationAccountId === '0')) {
+            return false;
+        }
+
+        if (this.type === TransactionType.Refund && (!this.relatedTransactionId || this.relatedTransactionId === '0')) {
             return false;
         }
 
@@ -128,6 +138,8 @@ export interface ImportTransactionRequestItem {
 
 export interface ImportTransactionResponse {
     readonly type: number;
+    readonly originalTransactionId?: string;
+    readonly relatedTransactionId?: string;
     readonly categoryId: string;
     readonly originalCategoryName: string;
     readonly time: number;

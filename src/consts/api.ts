@@ -1,6 +1,5 @@
 export const BASE_API_URL_PATH: string = '/api';
 export const BASE_QRCODE_PATH: string = '/qrcode';
-export const BASE_PROXY_URL_PATH: string = '/proxy';
 export const BASE_AMAP_API_PROXY_URL_PATH: string = '/_AMapService';
 
 export const DEFAULT_API_TIMEOUT: number = 10000; // 10s

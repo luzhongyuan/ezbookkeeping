@@ -646,8 +646,64 @@ func (s *TransactionService) CreateTransaction(c core.Context, transaction *mode
 	})
 }
 
+// OrderTransactionsForCreation returns the transactions in the order which they should be created (the transaction
+// which is referred by a refund transaction is created first), the positions of the returned transactions in the
+// original slice, and the function which replaces the original related transaction ids of the imported data with
+// the new transaction ids after the transaction ids are generated
+func OrderTransactionsForCreation(transactions []*models.Transaction, originalTransactionIds []int64) ([]*models.Transaction, []int, func(transactions []*models.Transaction) error) {
+	orderedTransactions := make([]*models.Transaction, 0, len(transactions))
+	orderedPositions := make([]int, 0, len(transactions))
+	orderedOriginalTransactionIds := make([]int64, 0, len(transactions))
+
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].RelatedTransactionId != 0 {
+			continue
+		}
+
+		orderedTransactions = append(orderedTransactions, transactions[i])
+		orderedPositions = append(orderedPositions, i)
+		orderedOriginalTransactionIds = append(orderedOriginalTransactionIds, originalTransactionIds[i])
+	}
+
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].RelatedTransactionId == 0 {
+			continue
+		}
+
+		orderedTransactions = append(orderedTransactions, transactions[i])
+		orderedPositions = append(orderedPositions, i)
+		orderedOriginalTransactionIds = append(orderedOriginalTransactionIds, originalTransactionIds[i])
+	}
+
+	importedTransactionIds := make(map[int64]int64, len(orderedTransactions))
+
+	return orderedTransactions, orderedPositions, func(transactions []*models.Transaction) error {
+		for i := 0; i < len(transactions); i++ {
+			if orderedOriginalTransactionIds[i] != 0 {
+				importedTransactionIds[orderedOriginalTransactionIds[i]] = transactions[i].TransactionId
+			}
+		}
+
+		for i := 0; i < len(transactions); i++ {
+			if transactions[i].RelatedTransactionId == 0 {
+				continue
+			}
+
+			newRelatedTransactionId, exists := importedTransactionIds[transactions[i].RelatedTransactionId]
+
+			if !exists {
+				return errs.ErrRelatedTransactionNotFound
+			}
+
+			transactions[i].RelatedTransactionId = newRelatedTransactionId
+		}
+
+		return nil
+	}
+}
+
 // BatchCreateTransactions saves new transactions to database
-func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, transactions []*models.Transaction, allTagIds map[int][]int64, processHandler core.TaskProcessUpdateHandler) error {
+func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, transactions []*models.Transaction, allTagIds map[int][]int64, beforeCreateTransactions func(transactions []*models.Transaction) error, processHandler core.TaskProcessUpdateHandler) error {
 	now := time.Now().Unix()
 	currentProcess := float64(0)
 	processUpdateStep := int(math.Max(100.0, float64(len(transactions)/100.0)))
@@ -710,6 +766,14 @@ func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, 
 		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 			transaction.RelatedId = transactionUuids[transactionUuidIndex]
 			transactionUuidIndex++
+		}
+	}
+
+	if beforeCreateTransactions != nil {
+		err := beforeCreateTransactions(transactions)
+
+		if err != nil {
+			return err
 		}
 	}
 
@@ -1064,6 +1128,12 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE &&
 			(transaction.Type != oldTransaction.Type || transaction.Amount < oldTransaction.Amount) {
 			// The transaction which has refunds cannot change type or reduce amount to be less than refunded amount
+			err = s.lockTransaction(sess, transaction.Uid, oldTransaction.TransactionId)
+
+			if err != nil {
+				return err
+			}
+
 			refundedAmount, err := s.getRefundedAmountByTransactionId(sess, transaction.Uid, oldTransaction.TransactionId, 0)
 
 			if err != nil {
@@ -3578,6 +3648,18 @@ func (s *TransactionService) getRelatedUpdateColumns(updateCols []string) []stri
 	return relatedUpdateCols
 }
 
+// lockTransaction locks the given transaction, so that it cannot be changed by other operations concurrently
+func (s *TransactionService) lockTransaction(sess *xorm.Session, uid int64, transactionId int64) error {
+	if !s.UserDataDB(uid).IsSupportForUpdate() {
+		// the database does not support "SELECT ... FOR UPDATE", the row lock is unnecessary or unavailable
+		return nil
+	}
+
+	_, err := sess.ID(transactionId).Where("uid=? AND deleted=?", uid, false).ForUpdate().Exist(&models.Transaction{})
+
+	return err
+}
+
 // verifyRefundTransaction verifies whether the refund transaction and the related transaction are valid
 func (s *TransactionService) verifyRefundTransaction(sess *xorm.Session, transaction *models.Transaction, excludedTransactionId int64) error {
 	if transaction.Type != models.TRANSACTION_DB_TYPE_INCOME {
@@ -3585,7 +3667,14 @@ func (s *TransactionService) verifyRefundTransaction(sess *xorm.Session, transac
 	}
 
 	relatedTransaction := &models.Transaction{}
-	has, err := sess.ID(transaction.RelatedTransactionId).Where("uid=? AND deleted=?", transaction.Uid, false).Get(relatedTransaction)
+	relatedQuery := sess.ID(transaction.RelatedTransactionId).Where("uid=? AND deleted=?", transaction.Uid, false)
+
+	if s.UserDataDB(transaction.Uid).IsSupportForUpdate() {
+		// lock the related transaction, so that its amount and its refunds cannot be changed concurrently
+		relatedQuery = relatedQuery.ForUpdate()
+	}
+
+	has, err := relatedQuery.Get(relatedTransaction)
 
 	if err != nil {
 		return err
@@ -3623,6 +3712,11 @@ func (s *TransactionService) getRefundedAmountByTransactionId(sess *xorm.Session
 
 	if excludedTransactionId > 0 {
 		querySession = querySession.And("transaction_id<>?", excludedTransactionId)
+	}
+
+	if s.UserDataDB(uid).IsSupportForUpdate() {
+		// use the locking read, so that the latest committed refund transactions are always used
+		querySession = querySession.ForUpdate()
 	}
 
 	err := querySession.Find(&refundTransactions)

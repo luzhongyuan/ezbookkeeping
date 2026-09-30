@@ -72,6 +72,8 @@ const (
 	TRANSACTION_DATA_TABLE_GEOGRAPHIC_LOCATION      TransactionDataTableColumn = 12
 	TRANSACTION_DATA_TABLE_TAGS                     TransactionDataTableColumn = 13
 	TRANSACTION_DATA_TABLE_DESCRIPTION              TransactionDataTableColumn = 14
+	TRANSACTION_DATA_TABLE_TRANSACTION_ID           TransactionDataTableColumn = 15
+	TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID   TransactionDataTableColumn = 16
 	TRANSACTION_DATA_TABLE_PAYEE                    TransactionDataTableColumn = 101
 	TRANSACTION_DATA_TABLE_MEMBER                   TransactionDataTableColumn = 102
 	TRANSACTION_DATA_TABLE_PROJECT                  TransactionDataTableColumn = 103

@@ -28,7 +28,7 @@ type DataStatisticsResponse struct {
 
 // ExportTransactionDataRequest represents export transaction request
 type ExportTransactionDataRequest struct {
-	Type         TransactionType `form:"type" binding:"min=0,max=4"`
+	Type         TransactionType `form:"type" binding:"min=0,max=5"`
 	CategoryIds  string          `form:"category_ids"`
 	AccountIds   string          `form:"account_ids"`
 	TagFilter    string          `form:"tag_filter" binding:"validTagFilter"`

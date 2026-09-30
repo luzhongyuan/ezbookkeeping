@@ -869,7 +869,20 @@ func (l *UserDataCli) ImportTransaction(c *core.CliContext, username string, fil
 		return errs.ErrOperationFailed
 	}
 
-	err = l.transactions.BatchCreateTransactions(c, user.Uid, newTransactions, newTransactionTagIdsMap, nil)
+	originalTransactionIds := make([]int64, len(parsedTransactions))
+
+	for i := 0; i < len(parsedTransactions); i++ {
+		originalTransactionIds[i] = parsedTransactions[i].OriginalTransactionId
+	}
+
+	orderedTransactions, orderedPositions, beforeCreateTransactions := services.OrderTransactionsForCreation(newTransactions, originalTransactionIds)
+	orderedTransactionTagIdsMap := make(map[int][]int64, len(orderedTransactions))
+
+	for i := 0; i < len(orderedPositions); i++ {
+		orderedTransactionTagIdsMap[i] = newTransactionTagIdsMap[orderedPositions[i]]
+	}
+
+	err = l.transactions.BatchCreateTransactions(c, user.Uid, orderedTransactions, orderedTransactionTagIdsMap, beforeCreateTransactions, nil)
 
 	if err != nil {
 		log.CliErrorf(c, "[user_data.ImportTransaction] failed to create transaction, because %s", err.Error())

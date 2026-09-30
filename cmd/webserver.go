@@ -212,29 +212,6 @@ func startWebServer(c *core.CliContext) error {
 
 	router.GET("/healthz.json", bindApi(api.Healths.HealthStatusHandler, config))
 
-	proxyRoute := router.Group("/proxy")
-	proxyRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
-	{
-		if config.EnableMapDataFetchProxy {
-			if config.MapProvider == settings.OpenStreetMapProvider ||
-				config.MapProvider == settings.OpenStreetMapHumanitarianStyleProvider ||
-				config.MapProvider == settings.OpenTopoMapProvider ||
-				config.MapProvider == settings.OPNVKarteMapProvider ||
-				config.MapProvider == settings.CyclOSMMapProvider ||
-				config.MapProvider == settings.CartoDBMapProvider ||
-				config.MapProvider == settings.TomTomMapProvider ||
-				config.MapProvider == settings.TianDiTuProvider ||
-				config.MapProvider == settings.CustomProvider {
-				proxyRoute.GET("/map/tile/:zoomLevel/:coordinateX/:fileName", bindProxy(api.MapImages.MapTileImageProxyHandler, config))
-			}
-
-			if config.MapProvider == settings.TianDiTuProvider ||
-				(config.MapProvider == settings.CustomProvider && config.CustomMapTileServerAnnotationLayerUrl != "") {
-				proxyRoute.GET("/map/annotation/:zoomLevel/:coordinateX/:fileName", bindProxy(api.MapImages.MapAnnotationImageProxyHandler, config))
-			}
-		}
-	}
-
 	if config.MapProvider == settings.AmapProvider && config.AmapSecurityVerificationMethod == settings.AmapSecurityVerificationInternalProxyMethod {
 		amapApiProxyRoute := router.Group("/_AMapService")
 		amapApiProxyRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByCookie(config), config))

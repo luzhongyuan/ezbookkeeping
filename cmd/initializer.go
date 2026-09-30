@@ -63,6 +63,10 @@ func initializeSystem(c *core.CliContext) (*settings.Config, error) {
 		log.BootWarnf(c, "[initializer.initializeSystem] \"secret_key\" in config file is not set, please change it to keep your user data safe")
 	}
 
+	if config.DeprecatedMapProvider != "" {
+		log.BootWarnf(c, "[initializer.initializeSystem] map provider \"%s\" in config file is no longer supported, the map has been disabled, please use \"%s\" or remove the \"map_provider\" item", config.DeprecatedMapProvider, settings.AmapProvider)
+	}
+
 	settings.SetCurrentConfig(config)
 
 	err = datastore.InitializeDataStore(config)

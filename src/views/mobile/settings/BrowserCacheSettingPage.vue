@@ -58,7 +58,7 @@
             </f7-list-item>
             <f7-list-item
                 link="#"
-                :class="{ 'disabled': loading || !isSupportedFileCache || !fileCacheStatistics || isMapProviderUseExternalSDK() || !isMapDataFetchProxyEnabled() }"
+                :class="{ 'disabled': loading || !isSupportedFileCache || !fileCacheStatistics || isMapProviderUseExternalSDK() }"
                 :title="tt('Map Data')"
                 :after="findNameByValue(allMapCacheExpirationOptions, mapCacheExpiration)"
                 @click="showMapDataCacheExpirationPopup = true"
@@ -129,7 +129,7 @@ import { useAppBrowserCacheSettingPageBase } from '@/views/base/settings/AppBrow
 
 import { findNameByValue } from '@/lib/common.ts';
 import { isMapProviderUseExternalSDK } from '@/lib/map/index.ts';
-import { getMapProvider, isMapDataFetchProxyEnabled } from '@/lib/server_settings.ts';
+import { getMapProvider } from '@/lib/server_settings.ts';
 
 const { tt, formatVolumeToLocalizedNumerals } = useI18n();
 const { showConfirm } = useI18nUIComponents();

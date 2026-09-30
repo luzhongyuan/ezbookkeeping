@@ -34,7 +34,6 @@ const (
 	NormalSubcategoryCategory               = 6
 	NormalSubcategoryTag                    = 7
 	NormalSubcategoryDataManagement         = 8
-	NormalSubcategoryMapProxy               = 9
 	NormalSubcategoryTemplate               = 10
 	NormalSubcategoryPicture                = 11
 	NormalSubcategoryConverter              = 12

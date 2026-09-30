@@ -18,7 +18,6 @@ import {
 import {
     BASE_API_URL_PATH,
     BASE_QRCODE_PATH,
-    BASE_PROXY_URL_PATH,
     BASE_AMAP_API_PROXY_URL_PATH,
     DEFAULT_API_TIMEOUT,
     DEFAULT_UPLOAD_API_TIMEOUT,
@@ -939,12 +938,6 @@ export default {
     },
     generateQrCodeUrl: (qrCodeName: string): string => {
         return `${getBasePath()}${BASE_QRCODE_PATH}/${qrCodeName}.png`;
-    },
-    getMapProxyTileImageAndAnnotationImageUrlPatterns(): string[] {
-        return [
-            `.*${BASE_PROXY_URL_PATH}/map/tile/[^/]+/[^/]+/[^/]+\\.png\\?provider=[^&]+.*$`,
-            `.*${BASE_PROXY_URL_PATH}/map/annotation/[^/]+/[^/]+/[^/]+\\.png\\?provider=[^&]+.*$`
-        ];
     },
     generateAmapJavascriptUrl: (callbackFnName: string): string => {
         return `${AMAP_JAVASCRIPT_URL}&key=${getAmapApplicationKey()}&plugin=AMap.ToolBar,AMap.PlaceSearch&callback=${callbackFnName}`;

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/mayswind/ezbookkeeping/pkg/core"
@@ -78,51 +77,6 @@ func (a *ServerSettingsApi) ServerSettingsJavascriptHandler(c *core.WebContext) 
 	}
 
 	a.appendStringSetting(builder, "m", config.MapProvider)
-
-	if config.EnableMapDataFetchProxy &&
-		(config.MapProvider == settings.OpenStreetMapProvider ||
-			config.MapProvider == settings.OpenStreetMapHumanitarianStyleProvider ||
-			config.MapProvider == settings.OpenTopoMapProvider ||
-			config.MapProvider == settings.OPNVKarteMapProvider ||
-			config.MapProvider == settings.CyclOSMMapProvider ||
-			config.MapProvider == settings.CartoDBMapProvider ||
-			config.MapProvider == settings.TomTomMapProvider ||
-			config.MapProvider == settings.TianDiTuProvider ||
-			config.MapProvider == settings.CustomProvider) {
-		a.appendBooleanSetting(builder, "mp", config.EnableMapDataFetchProxy)
-	}
-
-	if config.MapProvider == settings.CustomProvider {
-		a.appendStringSetting(builder, "cmzl", fmt.Sprintf("%d-%d-%d", config.CustomMapTileServerMinZoomLevel, config.CustomMapTileServerMaxZoomLevel, config.CustomMapTileServerDefaultZoomLevel))
-
-		if !config.EnableMapDataFetchProxy {
-			a.appendStringSetting(builder, "cmsu", config.CustomMapTileServerTileLayerUrl)
-
-			if config.CustomMapTileServerAnnotationLayerUrl != "" {
-				a.appendStringSetting(builder, "cmau", config.CustomMapTileServerAnnotationLayerUrl)
-			}
-		} else {
-			if config.CustomMapTileServerAnnotationLayerUrl != "" {
-				a.appendBooleanSetting(builder, "cmap", config.EnableMapDataFetchProxy)
-			}
-		}
-	}
-
-	if config.MapProvider == settings.TomTomMapProvider && config.TomTomMapAPIKey != "" && !config.EnableMapDataFetchProxy {
-		a.appendStringSetting(builder, "tmak", config.TomTomMapAPIKey)
-	}
-
-	if config.MapProvider == settings.TianDiTuProvider && config.TianDiTuAPIKey != "" && !config.EnableMapDataFetchProxy {
-		a.appendStringSetting(builder, "tdak", config.TianDiTuAPIKey)
-	}
-
-	if config.MapProvider == settings.GoogleMapProvider && config.GoogleMapAPIKey != "" {
-		a.appendStringSetting(builder, "gmak", config.GoogleMapAPIKey)
-	}
-
-	if config.MapProvider == settings.BaiduMapProvider && config.BaiduMapAK != "" {
-		a.appendStringSetting(builder, "bmak", config.BaiduMapAK)
-	}
 
 	if config.MapProvider == settings.AmapProvider && config.AmapApplicationKey != "" {
 		a.appendStringSetting(builder, "amak", config.AmapApplicationKey)

@@ -36,12 +36,6 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 		return nil, nil, nil, nil, nil, nil, errs.ErrNotFoundTransactionDataInFile
 	}
 
-	nameDbTypeMap, err := c.buildTransactionTypeNameDbTypeMap()
-
-	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
-	}
-
 	if !dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TIME) ||
 		!dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TYPE) ||
 		!dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_SUB_CATEGORY) ||
@@ -116,19 +110,29 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			return nil, nil, nil, nil, nil, nil, errs.ErrTransactionTimeInvalid
 		}
 
-		transactionDbType, err := c.getTransactionDbType(nameDbTypeMap, dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TYPE))
+		transactionTypeName := dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TYPE)
+		transactionType, exists := c.transactionTypeMapping[transactionTypeName]
+
+		if !exists {
+			log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse transaction type \"%s\" in data row \"index:%d\" for user \"uid:%d\", because this transaction type is not supported", transactionTypeName, dataRowIndex, user.Uid)
+			return nil, nil, nil, nil, nil, nil, errs.ErrTransactionTypeInvalid
+		}
+
+		transactionDbType, err := transactionType.ToTransactionDbType()
 
 		if err != nil {
-			log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse transaction type \"%s\" in data row \"index:%d\" for user \"uid:%d\", because %s", dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TYPE), dataRowIndex, user.Uid, err.Error())
+			log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse transaction type \"%s\" in data row \"index:%d\" for user \"uid:%d\", because %s", transactionTypeName, dataRowIndex, user.Uid, err.Error())
 			return nil, nil, nil, nil, nil, nil, errs.Or(err, errs.ErrTransactionTypeInvalid)
 		}
+
+		isRefundTransaction := transactionType == models.TRANSACTION_TYPE_REFUND
 
 		categoryId := int64(0)
 		categoryName := ""
 		subCategoryName := ""
 
 		if transactionDbType != models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
-			transactionCategoryType, err := c.getTransactionCategoryType(transactionDbType)
+			transactionCategoryType, err := c.getTransactionCategoryType(transactionType)
 
 			if err != nil {
 				log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse transaction category type in data row \"index:%d\" for user \"uid:%d\", because %s", dataRowIndex, user.Uid, err.Error())
@@ -138,7 +142,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			categoryName = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_CATEGORY)
 			subCategoryName = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_SUB_CATEGORY)
 
-			if transactionDbType == models.TRANSACTION_DB_TYPE_EXPENSE {
+			if transactionDbType == models.TRANSACTION_DB_TYPE_EXPENSE || isRefundTransaction {
 				subCategory, exists := c.getTransactionCategory(expenseCategoryMap, categoryName, subCategoryName)
 
 				if !exists {
@@ -184,6 +188,43 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 
 				categoryId = subCategory.CategoryId
 			}
+		}
+
+		originalTransactionId := int64(0)
+		originalTransactionIdText := ""
+
+		if dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID) {
+			originalTransactionIdText = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID)
+		}
+
+		if originalTransactionIdText != "" {
+			originalTransactionId, err = utils.StringToInt64(originalTransactionIdText)
+
+			if err != nil {
+				log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse transaction id \"%s\" in data row \"index:%d\" for user \"uid:%d\", because %s", originalTransactionIdText, dataRowIndex, user.Uid, err.Error())
+				return nil, nil, nil, nil, nil, nil, errs.ErrTransactionIdInvalid
+			}
+		}
+
+		relatedTransactionId := int64(0)
+		relatedTransactionIdText := ""
+
+		if dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID) {
+			relatedTransactionIdText = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID)
+		}
+
+		if relatedTransactionIdText != "" {
+			relatedTransactionId, err = utils.StringToInt64(relatedTransactionIdText)
+
+			if err != nil {
+				log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse related transaction id \"%s\" in data row \"index:%d\" for user \"uid:%d\", because %s", relatedTransactionIdText, dataRowIndex, user.Uid, err.Error())
+				return nil, nil, nil, nil, nil, nil, errs.ErrTransactionIdInvalid
+			}
+		}
+
+		if isRefundTransaction && relatedTransactionId == 0 {
+			log.Errorf(ctx, "[data_table_transaction_data_importer.ParseImportedData] cannot parse refund transaction in data row \"index:%d\" for user \"uid:%d\", because the related transaction id is missing", dataRowIndex, user.Uid)
+			return nil, nil, nil, nil, nil, nil, errs.ErrRelatedTransactionNotFound
 		}
 
 		accountName := dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_ACCOUNT_NAME)
@@ -380,12 +421,14 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 				HideAmount:           false,
 				RelatedAccountId:     relatedAccountId,
 				RelatedAccountAmount: relatedAccountAmount,
+				RelatedTransactionId: relatedTransactionId,
 				Comment:              description,
 				GeoLongitude:         geoLongitude,
 				GeoLatitude:          geoLatitude,
 				CreatedIp:            ctx.ClientIP(),
 			},
 			TagIds:                             tagIds,
+			OriginalTransactionId:              originalTransactionId,
 			OriginalCategoryName:               subCategoryName,
 			OriginalSourceAccountName:          accountName,
 			OriginalSourceAccountCurrency:      accountCurrency,
@@ -407,46 +450,13 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 	return allNewTransactions, allNewAccounts, allNewSubExpenseCategories, allNewSubIncomeCategories, allNewSubTransferCategories, allNewTags, nil
 }
 
-func (c *DataTableTransactionDataImporter) buildTransactionTypeNameDbTypeMap() (map[string]models.TransactionDbType, error) {
-	if c.transactionTypeMapping == nil {
-		return nil, errs.ErrTransactionTypeInvalid
-	}
-
-	nameDbTypeMap := make(map[string]models.TransactionDbType, len(c.transactionTypeMapping))
-
-	for name, transactionType := range c.transactionTypeMapping {
-		if transactionType == models.TRANSACTION_TYPE_MODIFY_BALANCE {
-			nameDbTypeMap[name] = models.TRANSACTION_DB_TYPE_MODIFY_BALANCE
-		} else if transactionType == models.TRANSACTION_TYPE_INCOME {
-			nameDbTypeMap[name] = models.TRANSACTION_DB_TYPE_INCOME
-		} else if transactionType == models.TRANSACTION_TYPE_EXPENSE {
-			nameDbTypeMap[name] = models.TRANSACTION_DB_TYPE_EXPENSE
-		} else if transactionType == models.TRANSACTION_TYPE_TRANSFER {
-			nameDbTypeMap[name] = models.TRANSACTION_DB_TYPE_TRANSFER_OUT
-		} else {
-			return nil, errs.ErrTransactionTypeInvalid
-		}
-	}
-
-	return nameDbTypeMap, nil
-}
-
-func (c *DataTableTransactionDataImporter) getTransactionDbType(nameDbTypeMap map[string]models.TransactionDbType, transactionTypeName string) (models.TransactionDbType, error) {
-	transactionType, exists := nameDbTypeMap[transactionTypeName]
-
-	if !exists {
-		return 0, errs.ErrTransactionTypeInvalid
-	}
-
-	return transactionType, nil
-}
-
-func (c *DataTableTransactionDataImporter) getTransactionCategoryType(transactionType models.TransactionDbType) (models.TransactionCategoryType, error) {
-	if transactionType == models.TRANSACTION_DB_TYPE_INCOME {
+func (c *DataTableTransactionDataImporter) getTransactionCategoryType(transactionType models.TransactionType) (models.TransactionCategoryType, error) {
+	if transactionType == models.TRANSACTION_TYPE_INCOME {
 		return models.CATEGORY_TYPE_INCOME, nil
-	} else if transactionType == models.TRANSACTION_DB_TYPE_EXPENSE {
+	} else if transactionType == models.TRANSACTION_TYPE_EXPENSE || transactionType == models.TRANSACTION_TYPE_REFUND {
+		// refund transaction uses the category of the expense transaction which it refers to
 		return models.CATEGORY_TYPE_EXPENSE, nil
-	} else if transactionType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+	} else if transactionType == models.TRANSACTION_TYPE_TRANSFER {
 		return models.CATEGORY_TYPE_TRANSFER, nil
 	} else {
 		return 0, errs.ErrTransactionTypeInvalid

@@ -79,45 +79,6 @@ export function getMapProvider(): string {
     return getServerSetting('m') as string;
 }
 
-export function isMapDataFetchProxyEnabled(): boolean {
-    return getServerSetting('mp') === 1;
-}
-
-export function getCustomMapTileLayerUrl(): string {
-    return getServerSetting('cmsu') as string;
-}
-
-export function getCustomMapAnnotationLayerUrl(): string {
-    return getServerSetting('cmau') as string;
-}
-
-export function isCustomMapAnnotationLayerDataFetchProxyEnabled(): boolean {
-    return getServerSetting('cmap') === 1;
-}
-
-export function getCustomMapMinZoomLevel(): number {
-    const zoomLevelSettings = (getServerSetting('cmzl') as string || '').split('-');
-    return (zoomLevelSettings && zoomLevelSettings[0]) ? parseInt(zoomLevelSettings[0]) : 1;
-}
-
-export function getCustomMapMaxZoomLevel(): number {
-    const zoomLevelSettings = (getServerSetting('cmzl') as string || '').split('-');
-    return (zoomLevelSettings && zoomLevelSettings[1]) ? parseInt(zoomLevelSettings[1]) : 18;
-}
-
-export function getCustomMapDefaultZoomLevel(): number {
-    const zoomLevelSettings = (getServerSetting('cmzl') as string || '').split('-');
-    return (zoomLevelSettings && zoomLevelSettings[2]) ? parseInt(zoomLevelSettings[2]) : 14;
-}
-
-export function getTomTomMapAPIKey(): string {
-    return getServerSetting('tmak') as string;
-}
-
-export function getTianDiTuMapAPIKey(): string {
-    return getServerSetting('tdak') as string;
-}
-
 export function getAmapApplicationKey(): string {
     return getServerSetting('amak') as string;
 }

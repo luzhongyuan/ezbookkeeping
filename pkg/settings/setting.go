@@ -122,19 +122,24 @@ const (
 
 // Map provider types
 const (
-	OpenStreetMapProvider                  string = "openstreetmap"
-	OpenStreetMapHumanitarianStyleProvider string = "openstreetmap_humanitarian"
-	OpenTopoMapProvider                    string = "opentopomap"
-	OPNVKarteMapProvider                   string = "opnvkarte"
-	CyclOSMMapProvider                     string = "cyclosm"
-	CartoDBMapProvider                     string = "cartodb"
-	TomTomMapProvider                      string = "tomtom"
-	TianDiTuProvider                       string = "tianditu"
-	GoogleMapProvider                      string = "googlemap"
-	BaiduMapProvider                       string = "baidumap"
-	AmapProvider                           string = "amap"
-	CustomProvider                         string = "custom"
+	AmapProvider string = "amap"
 )
+
+// removedMapProviders contains the map providers which are no longer supported. If one of these
+// values is configured, the map will be disabled and a warning will be logged when the server starts.
+var removedMapProviders = []string{
+	"openstreetmap",
+	"openstreetmap_humanitarian",
+	"opentopomap",
+	"opnvkarte",
+	"cyclosm",
+	"cartodb",
+	"tomtom",
+	"tianditu",
+	"googlemap",
+	"baidumap",
+	"custom",
+}
 
 // Amap security verification method
 const (
@@ -470,22 +475,14 @@ type Config struct {
 	AfterOpenNotification     MultiLanguageContentConfig
 
 	// Map
-	MapProvider                           string
-	EnableMapDataFetchProxy               bool
-	MapProxy                              string
-	TomTomMapAPIKey                       string
-	TianDiTuAPIKey                        string
-	GoogleMapAPIKey                       string
-	BaiduMapAK                            string
-	AmapApplicationKey                    string
-	AmapSecurityVerificationMethod        string
-	AmapApplicationSecret                 string
-	AmapApiExternalProxyUrl               string
-	CustomMapTileServerTileLayerUrl       string
-	CustomMapTileServerAnnotationLayerUrl string
-	CustomMapTileServerMinZoomLevel       uint8
-	CustomMapTileServerMaxZoomLevel       uint8
-	CustomMapTileServerDefaultZoomLevel   uint8
+	MapProvider string
+	// DeprecatedMapProvider contains the removed map provider which is still set in the config file.
+	// It is empty if no removed map provider is configured, the map is disabled in this case.
+	DeprecatedMapProvider          string
+	AmapApplicationKey             string
+	AmapSecurityVerificationMethod string
+	AmapApplicationSecret          string
+	AmapApiExternalProxyUrl        string
 
 	// Exchange Rates
 	ExchangeRatesDataSource                       string
@@ -1226,47 +1223,25 @@ func loadNotificationConfiguration(config *Config, configFile *ini.File, section
 func loadMapConfiguration(config *Config, configFile *ini.File, sectionName string) error {
 	mapProvider := getConfigItemStringValue(configFile, sectionName, "map_provider")
 
-	if mapProvider == "" {
+	if mapProvider == "" || mapProvider == AmapProvider {
+		config.MapProvider = mapProvider
+	} else if isRemovedMapProvider(mapProvider) {
+		// the map providers other than "amap" are no longer supported, keep the server running
+		// with the map disabled, the caller will warn the user about the removed map provider
 		config.MapProvider = ""
-	} else if mapProvider == OpenStreetMapProvider {
-		config.MapProvider = OpenStreetMapProvider
-	} else if mapProvider == OpenStreetMapHumanitarianStyleProvider {
-		config.MapProvider = OpenStreetMapHumanitarianStyleProvider
-	} else if mapProvider == OpenTopoMapProvider {
-		config.MapProvider = OpenTopoMapProvider
-	} else if mapProvider == OPNVKarteMapProvider {
-		config.MapProvider = OPNVKarteMapProvider
-	} else if mapProvider == CyclOSMMapProvider {
-		config.MapProvider = CyclOSMMapProvider
-	} else if mapProvider == CartoDBMapProvider {
-		config.MapProvider = CartoDBMapProvider
-	} else if mapProvider == TomTomMapProvider {
-		config.MapProvider = TomTomMapProvider
-	} else if mapProvider == TianDiTuProvider {
-		config.MapProvider = TianDiTuProvider
-	} else if mapProvider == GoogleMapProvider {
-		config.MapProvider = GoogleMapProvider
-	} else if mapProvider == BaiduMapProvider {
-		config.MapProvider = BaiduMapProvider
-	} else if mapProvider == AmapProvider {
-		config.MapProvider = AmapProvider
-	} else if mapProvider == CustomProvider {
-		config.MapProvider = CustomProvider
+		config.DeprecatedMapProvider = mapProvider
 	} else {
 		return errs.ErrInvalidMapProvider
 	}
 
-	config.EnableMapDataFetchProxy = getConfigItemBoolValue(configFile, sectionName, "map_data_fetch_proxy", false)
-	config.MapProxy = getConfigItemStringValue(configFile, sectionName, "proxy", "system")
-	config.TomTomMapAPIKey = getConfigItemStringValue(configFile, sectionName, "tomtom_map_api_key")
-	config.TianDiTuAPIKey = getConfigItemStringValue(configFile, sectionName, "tianditu_map_app_key")
-	config.GoogleMapAPIKey = getConfigItemStringValue(configFile, sectionName, "google_map_api_key")
-	config.BaiduMapAK = getConfigItemStringValue(configFile, sectionName, "baidu_map_ak")
 	config.AmapApplicationKey = getConfigItemStringValue(configFile, sectionName, "amap_application_key")
 
 	amapSecurityVerificationMethod := getConfigItemStringValue(configFile, sectionName, "amap_security_verification_method")
 
-	if amapSecurityVerificationMethod == AmapSecurityVerificationInternalProxyMethod {
+	if amapSecurityVerificationMethod == "" {
+		// the internal proxy is the default method when this item is not set
+		config.AmapSecurityVerificationMethod = AmapSecurityVerificationInternalProxyMethod
+	} else if amapSecurityVerificationMethod == AmapSecurityVerificationInternalProxyMethod {
 		config.AmapSecurityVerificationMethod = AmapSecurityVerificationInternalProxyMethod
 	} else if amapSecurityVerificationMethod == AmapSecurityVerificationExternalProxyMethod {
 		config.AmapSecurityVerificationMethod = AmapSecurityVerificationExternalProxyMethod
@@ -1279,13 +1254,17 @@ func loadMapConfiguration(config *Config, configFile *ini.File, sectionName stri
 	config.AmapApplicationSecret = getConfigItemStringValue(configFile, sectionName, "amap_application_secret")
 	config.AmapApiExternalProxyUrl = getConfigItemStringValue(configFile, sectionName, "amap_api_external_proxy_url")
 
-	config.CustomMapTileServerTileLayerUrl = getConfigItemStringValue(configFile, sectionName, "custom_map_tile_server_url")
-	config.CustomMapTileServerAnnotationLayerUrl = getConfigItemStringValue(configFile, sectionName, "custom_map_tile_server_annotation_url")
-	config.CustomMapTileServerMinZoomLevel = getConfigItemUint8Value(configFile, sectionName, "custom_map_tile_server_min_zoom_level", 1)
-	config.CustomMapTileServerMaxZoomLevel = getConfigItemUint8Value(configFile, sectionName, "custom_map_tile_server_max_zoom_level", 18)
-	config.CustomMapTileServerDefaultZoomLevel = getConfigItemUint8Value(configFile, sectionName, "custom_map_tile_server_default_zoom_level", 14)
-
 	return nil
+}
+
+func isRemovedMapProvider(mapProvider string) bool {
+	for i := 0; i < len(removedMapProviders); i++ {
+		if mapProvider == removedMapProviders[i] {
+			return true
+		}
+	}
+
+	return false
 }
 func loadExchangeRatesConfiguration(config *Config, configFile *ini.File, sectionName string) error {
 	dataSource := getConfigItemStringValue(configFile, sectionName, "data_source")

@@ -561,6 +561,7 @@ export interface TransactionCreateRequest {
     readonly sourceAmount: number;
     readonly destinationAmount: number;
     readonly relatedTransactionId?: string;
+    readonly originalTransactionId?: string;
     readonly hideAmount: boolean;
     readonly tagIds: string[];
     readonly pictureIds: string[];

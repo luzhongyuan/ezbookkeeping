@@ -93,6 +93,7 @@
                 <v-chip label class="text-income" variant="outlined" size="x-small" v-else-if="value === TransactionType.Income">{{ tt('Income') }}</v-chip>
                 <v-chip label class="text-expense" variant="outlined" size="x-small" v-else-if="value === TransactionType.Expense">{{ tt('Expense') }}</v-chip>
                 <v-chip label color="primary" variant="outlined" size="x-small" v-else-if="value === TransactionType.Transfer">{{ tt('Transfer') }}</v-chip>
+                <v-chip label class="text-income" variant="outlined" size="x-small" v-else-if="value === TransactionType.Refund">{{ tt('Refund') }}</v-chip>
                 <v-chip label color="default" variant="outlined" size="x-small" v-else>{{ tt('Unknown') }}</v-chip>
             </template>
             <template #item.actualCategoryName="{ item }">
@@ -110,7 +111,7 @@
                         <span>{{ item.originalCategoryName }}</span>
                     </div>
                 </div>
-                <div style="width: 260px" v-if="editingTransaction === item && item.type === TransactionType.Expense">
+                <div style="width: 260px" v-if="editingTransaction === item && (item.type === TransactionType.Expense || item.type === TransactionType.Refund)">
                     <two-column-select density="compact" variant="plain"
                                        primary-key-field="id" primary-value-field="id" primary-title-field="name"
                                        primary-icon-field="icon" primary-icon-type-field="iconType" primary-icon-type="category" primary-color-field="color"
@@ -602,9 +603,9 @@ const allSecondaryCategoriesMapByName = computed<Record<number, Record<string, T
 }));
 const allTagsMap = computed<Record<string, TransactionTag>>(() => transactionTagsStore.allTransactionTagsMap);
 
-const allInvalidExpenseCategoryNames = computed<NameValue[]>(() => getCurrentInvalidCategoryNames(TransactionType.Expense));
-const allInvalidIncomeCategoryNames = computed<NameValue[]>(() => getCurrentInvalidCategoryNames(TransactionType.Income));
-const allInvalidTransferCategoryNames = computed<NameValue[]>(() => getCurrentInvalidCategoryNames(TransactionType.Transfer));
+const allInvalidExpenseCategoryNames = computed<NameValue[]>(() => getCurrentInvalidCategoryNames([TransactionType.Expense, TransactionType.Refund]));
+const allInvalidIncomeCategoryNames = computed<NameValue[]>(() => getCurrentInvalidCategoryNames([TransactionType.Income]));
+const allInvalidTransferCategoryNames = computed<NameValue[]>(() => getCurrentInvalidCategoryNames([TransactionType.Transfer]));
 const allInvalidAccountNames = computed<NameValue[]>(() => getCurrentInvalidAccountNames());
 const allInvalidTransactionTagNames = computed<NameValue[]>(() => getCurrentInvalidTagNames());
 const allOriginalExpenseCategoryNames = computed<NameValue[]>(() => getAllOriginalCategoryNames(TransactionType.Expense));
@@ -1311,6 +1312,8 @@ function getDisplayTransactionType(transaction: ImportTransaction): string {
         return tt('Expense');
     } else if (transaction.type === TransactionType.Transfer) {
         return tt('Transfer');
+    } else if (transaction.type === TransactionType.Refund) {
+        return tt('Refund');
     } else {
         return tt('Unknown');
     }
@@ -1398,7 +1401,7 @@ function getDestinationAccountDisplayName(transaction: ImportTransaction): strin
     }
 }
 
-function getCurrentInvalidCategoryNames(transactionType: TransactionType): NameValue[] {
+function getCurrentInvalidCategoryNames(transactionTypes: TransactionType[]): NameValue[] {
     const invalidCategoryNames: Record<string, boolean> = {};
     const invalidCategories: NameValue[] = [];
 
@@ -1409,7 +1412,7 @@ function getCurrentInvalidCategoryNames(transactionType: TransactionType): NameV
     for (const importTransaction of props.importTransactions) {
         const categoryId = importTransaction.categoryId;
 
-        if (importTransaction.type === transactionType && (!categoryId || categoryId === '0' || !allCategoriesMap.value[categoryId])) {
+        if (transactionTypes.includes(importTransaction.type) && (!categoryId || categoryId === '0' || !allCategoriesMap.value[categoryId])) {
             invalidCategoryNames[importTransaction.originalCategoryName] = true;
         }
     }

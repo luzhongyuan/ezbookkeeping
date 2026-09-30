@@ -34,6 +34,8 @@ var ezbookkeepingDataColumnNameMapping = map[datatable.TransactionDataTableColum
 	datatable.TRANSACTION_DATA_TABLE_GEOGRAPHIC_LOCATION:      "Geographic Location",
 	datatable.TRANSACTION_DATA_TABLE_TAGS:                     "Tags",
 	datatable.TRANSACTION_DATA_TABLE_DESCRIPTION:              "Description",
+	datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID:           "Transaction Id",
+	datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID:   "Related Transaction Id",
 }
 
 var ezbookkeepingTransactionTypeNameMapping = map[models.TransactionType]string{
@@ -41,6 +43,7 @@ var ezbookkeepingTransactionTypeNameMapping = map[models.TransactionType]string{
 	models.TRANSACTION_TYPE_INCOME:         "Income",
 	models.TRANSACTION_TYPE_EXPENSE:        "Expense",
 	models.TRANSACTION_TYPE_TRANSFER:       "Transfer",
+	models.TRANSACTION_TYPE_REFUND:         "Refund",
 }
 
 var ezbookkeepingDataColumns = []datatable.TransactionDataTableColumn{
@@ -62,9 +65,17 @@ var ezbookkeepingDataColumns = []datatable.TransactionDataTableColumn{
 
 // ToExportedContent returns the exported transaction plain text data
 func (c *defaultTransactionDataPlainTextConverter) ToExportedContent(ctx core.Context, uid int64, transactions []*models.Transaction, accountMap map[int64]*models.Account, categoryMap map[int64]*models.TransactionCategory, tagMap map[int64]*models.TransactionTag, allTagIndexes map[int64][]int64) ([]byte, error) {
+	dataColumns := make([]datatable.TransactionDataTableColumn, 0, len(ezbookkeepingDataColumns)+2)
+	dataColumns = append(dataColumns, ezbookkeepingDataColumns...)
+
+	if existsRefundTransaction(transactions) {
+		// the transaction id and the related transaction id are only required for restoring refund transactions
+		dataColumns = append(dataColumns, datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID, datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID)
+	}
+
 	dataTableBuilder := createNewDefaultTransactionPlainTextDataTableBuilder(
 		len(transactions),
-		ezbookkeepingDataColumns,
+		dataColumns,
 		ezbookkeepingDataColumnNameMapping,
 		c.columnSeparator,
 		ezbookkeepingLineSeparator,
@@ -107,4 +118,14 @@ func (c *defaultTransactionDataPlainTextConverter) ParseImportedData(ctx core.Co
 	)
 
 	return dataTableImporter.ParseImportedData(ctx, user, transactionDataTable, defaultTimezone, additionalOptions, accountMap, expenseCategoryMap, incomeCategoryMap, transferCategoryMap, tagMap)
+}
+
+func existsRefundTransaction(transactions []*models.Transaction) bool {
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].RelatedTransactionId != 0 {
+			return true
+		}
+	}
+
+	return false
 }

@@ -43,9 +43,14 @@ func (c *DataTableTransactionDataExporter) BuildExportedContent(ctx core.Context
 
 		dataRowMap[datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TIME] = utils.FormatUnixTimeToLongDateTime(transactionUnixTime, transactionTimeZone)
 		dataRowMap[datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TIMEZONE] = utils.FormatTimezoneOffset(transactionUnixTime, transactionTimeZone)
-		dataRowMap[datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TYPE] = dataTableBuilder.ReplaceDelimiters(c.getDisplayTransactionTypeName(transaction.Type))
+		dataRowMap[datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TYPE] = dataTableBuilder.ReplaceDelimiters(c.getDisplayTransactionTypeName(transaction))
 		dataRowMap[datatable.TRANSACTION_DATA_TABLE_CATEGORY] = c.getExportedTransactionCategoryName(dataTableBuilder, transaction.CategoryId, categoryMap)
 		dataRowMap[datatable.TRANSACTION_DATA_TABLE_SUB_CATEGORY] = c.getExportedTransactionSubCategoryName(dataTableBuilder, transaction.CategoryId, categoryMap)
+		dataRowMap[datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID] = utils.Int64ToString(transaction.TransactionId)
+
+		if transaction.RelatedTransactionId != 0 {
+			dataRowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID] = utils.Int64ToString(transaction.RelatedTransactionId)
+		}
 
 		if transaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 			dataRowMap[datatable.TRANSACTION_DATA_TABLE_ACCOUNT_NAME] = c.getExportedAccountName(dataTableBuilder, transaction.AccountId, accountMap)
@@ -77,11 +82,15 @@ func (c *DataTableTransactionDataExporter) BuildExportedContent(ctx core.Context
 	return nil
 }
 
-func (c *DataTableTransactionDataExporter) getDisplayTransactionTypeName(transactionDbType models.TransactionDbType) string {
-	transactionType, err := transactionDbType.ToTransactionType()
+func (c *DataTableTransactionDataExporter) getDisplayTransactionTypeName(transaction *models.Transaction) string {
+	transactionType, err := transaction.Type.ToTransactionType()
 
 	if err != nil {
 		return ""
+	}
+
+	if transaction.RelatedTransactionId != 0 {
+		transactionType = models.TRANSACTION_TYPE_REFUND
 	}
 
 	transactionTypeName, exists := c.transactionTypeMapping[transactionType]

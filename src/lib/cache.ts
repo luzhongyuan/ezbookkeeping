@@ -17,7 +17,6 @@ import {
 } from '@/consts/cache.ts';
 
 import { isFunction, isObject, isNumber } from './common.ts';
-import services from './services.ts';
 import logger from './logger.ts';
 
 let controllerchangeListenerAdded: boolean = false;
@@ -42,7 +41,8 @@ function findFirstCacheName(prefix: string): Promise<string> {
 function doUpdateMapCacheExpiration(expireSeconds: number): Promise<void> {
     const config: SWMapCacheConfig = {
         enabled: expireSeconds >= 0,
-        patterns: services.getMapProxyTileImageAndAnnotationImageUrlPatterns(),
+        // the map data is no longer fetched via the ezbookkeeping server, so no map data url needs to be cached
+        patterns: [],
         maxEntries: MAP_CACHE_MAX_ENTRIES,
         maxAgeMilliseconds: expireSeconds * 1000
     };

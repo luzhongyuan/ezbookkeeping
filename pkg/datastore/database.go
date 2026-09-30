@@ -18,6 +18,11 @@ func (db *Database) NewSession(c core.Context) *xorm.Session {
 	return db.engineGroup.Context(NewXOrmContextAdapter(c))
 }
 
+// IsSupportForUpdate returns whether the database supports "SELECT ... FOR UPDATE"
+func (db *Database) IsSupportForUpdate() bool {
+	return db.databaseType == settings.MySqlDbType || db.databaseType == settings.PostgresDbType
+}
+
 // DoTransaction runs a new database transaction
 func (db *Database) DoTransaction(c core.Context, fn func(sess *xorm.Session) error) (err error) {
 	sess := db.engineGroup.NewSession()

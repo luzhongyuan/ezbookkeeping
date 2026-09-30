@@ -5,6 +5,7 @@ import "github.com/mayswind/ezbookkeeping/pkg/utils"
 // ImportTransaction represents the imported transaction data
 type ImportTransaction struct {
 	*Transaction
+	OriginalTransactionId              int64
 	TagIds                             []string
 	OriginalCategoryName               string
 	OriginalSourceAccountName          string
@@ -37,6 +38,8 @@ type ImportTransactionRequestItem struct {
 // ImportTransactionResponse represents a view-object of the imported transaction data
 type ImportTransactionResponse struct {
 	Type                               TransactionType                 `json:"type"`
+	OriginalTransactionId              int64                           `json:"originalTransactionId,string,omitempty"`
+	RelatedTransactionId               int64                           `json:"relatedTransactionId,string,omitempty"`
 	CategoryId                         int64                           `json:"categoryId,string"`
 	OriginalCategoryName               string                          `json:"originalCategoryName"`
 	Time                               int64                           `json:"time"`
@@ -69,6 +72,10 @@ func (t ImportTransaction) ToImportTransactionResponse() *ImportTransactionRespo
 		return nil
 	}
 
+	if t.RelatedTransactionId != 0 {
+		transactionType = TRANSACTION_TYPE_REFUND
+	}
+
 	geoLocation := &TransactionGeoLocationResponse{}
 
 	if t.GeoLongitude != 0 || t.GeoLatitude != 0 {
@@ -80,6 +87,8 @@ func (t ImportTransaction) ToImportTransactionResponse() *ImportTransactionRespo
 
 	return &ImportTransactionResponse{
 		Type:                               transactionType,
+		OriginalTransactionId:              t.OriginalTransactionId,
+		RelatedTransactionId:               t.RelatedTransactionId,
 		CategoryId:                         t.CategoryId,
 		OriginalCategoryName:               t.OriginalCategoryName,
 		Time:                               utils.GetUnixTimeFromTransactionTime(t.TransactionTime),

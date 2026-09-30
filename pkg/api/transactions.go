@@ -1404,6 +1404,11 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 		return nil, errs.ErrTransactionTypeInvalid
 	}
 
+	if transactionModifyReq.Type == models.TRANSACTION_TYPE_REFUND && transaction.RelatedTransactionId == 0 {
+		log.Warnf(c, "[transactions.TransactionModifyHandler] transaction \"id:%d\" is not a refund transaction, so it cannot be modified to refund transaction for user \"uid:%d\"", transactionModifyReq.Id, uid)
+		return nil, errs.ErrTransactionTypeInvalid
+	}
+
 	changeToTransfer := newTransactionType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT && transaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT
 
 	if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE && transactionModifyReq.CategoryId != 0 {
@@ -1437,16 +1442,17 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	transactionPictureIds := a.transactionPictures.GetTransactionPictureIds(transactionPictureInfos)
 
 	newTransaction := &models.Transaction{
-		TransactionId:     transaction.TransactionId,
-		Uid:               uid,
-		Type:              newTransactionType,
-		CategoryId:        transactionModifyReq.CategoryId,
-		TransactionTime:   utils.GetMinTransactionTimeFromUnixTime(transactionModifyReq.Time),
-		TimezoneUtcOffset: transactionModifyReq.UtcOffset,
-		AccountId:         transactionModifyReq.SourceAccountId,
-		Amount:            transactionModifyReq.SourceAmount,
-		HideAmount:        transactionModifyReq.HideAmount,
-		Comment:           transactionModifyReq.Comment,
+		TransactionId:        transaction.TransactionId,
+		Uid:                  uid,
+		Type:                 newTransactionType,
+		CategoryId:           transactionModifyReq.CategoryId,
+		TransactionTime:      utils.GetMinTransactionTimeFromUnixTime(transactionModifyReq.Time),
+		TimezoneUtcOffset:    transactionModifyReq.UtcOffset,
+		AccountId:            transactionModifyReq.SourceAccountId,
+		Amount:               transactionModifyReq.SourceAmount,
+		RelatedTransactionId: transactionModifyReq.RelatedTransactionId,
+		HideAmount:           transactionModifyReq.HideAmount,
+		Comment:              transactionModifyReq.Comment,
 	}
 
 	if newTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
@@ -2368,10 +2374,22 @@ func (a *TransactionsApi) TransactionBatchDeleteHandler(c *core.WebContext) (any
 		}
 	}
 
+	// A transaction which has refunds cannot be deleted before its refunds, and a transfer out transaction
+	// must be deleted before its transfer in transaction, so the transactions which are referenced by other
+	// transactions in the same batch need to be deleted first
+	transactionsToDelete := a.getTransactionsInDeletionOrder(transactions)
+
+	deletedTransactionIds := make(map[int64]bool, len(transactionsToDelete))
 	deletedCount := 0
 
-	for i := 0; i < len(transactions); i++ {
-		transaction := transactions[i]
+	for i := 0; i < len(transactionsToDelete); i++ {
+		transaction := transactionsToDelete[i]
+
+		if deletedTransactionIds[transaction.TransactionId] {
+			// the transaction has been deleted together with its related transaction
+			continue
+		}
+
 		err = a.transactions.DeleteTransaction(c, uid, transaction.TransactionId)
 
 		if err != nil {
@@ -2379,11 +2397,45 @@ func (a *TransactionsApi) TransactionBatchDeleteHandler(c *core.WebContext) (any
 			return nil, errs.Or(err, errs.ErrOperationFailed)
 		}
 
+		deletedTransactionIds[transaction.TransactionId] = true
+
+		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			deletedTransactionIds[transaction.RelatedId] = true
+		}
+
 		deletedCount++
 	}
 
 	log.Infof(c, "[transactions.TransactionBatchDeleteHandler] user \"uid:%d\" has deleted %d transactions", uid, deletedCount)
 	return true, nil
+}
+
+// getTransactionsInDeletionOrder returns the transactions to delete in the order that the referenced
+// transactions are deleted before the transactions which refer to them
+func (a *TransactionsApi) getTransactionsInDeletionOrder(transactions []*models.Transaction) []*models.Transaction {
+	transactionsToDelete := make([]*models.Transaction, 0, len(transactions))
+
+	// refund transactions are deleted before the expense transactions which they refer to
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].RelatedTransactionId != 0 {
+			transactionsToDelete = append(transactionsToDelete, transactions[i])
+		}
+	}
+
+	// transfer out transactions are deleted before the transfer in transactions which refer to them
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			transactionsToDelete = append(transactionsToDelete, transactions[i])
+		}
+	}
+
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].RelatedTransactionId == 0 && transactions[i].Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			transactionsToDelete = append(transactionsToDelete, transactions[i])
+		}
+	}
+
+	return transactionsToDelete
 }
 
 // TransactionParseImportCustomFileDataHandler returns the parsed file data by request parameters for current user
@@ -2794,9 +2846,14 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 			return nil, errs.ErrTransactionHasTooManyTags
 		}
 
-		if transactionCreateReq.Type < models.TRANSACTION_TYPE_MODIFY_BALANCE || transactionCreateReq.Type > models.TRANSACTION_TYPE_TRANSFER {
+		if transactionCreateReq.Type < models.TRANSACTION_TYPE_MODIFY_BALANCE || transactionCreateReq.Type > models.TRANSACTION_TYPE_REFUND {
 			log.Warnf(c, "[transactions.TransactionImportHandler] transaction type of transaction \"index:%d\" is invalid", i)
 			return nil, errs.ErrTransactionTypeInvalid
+		}
+
+		if transactionCreateReq.Type == models.TRANSACTION_TYPE_REFUND && transactionCreateReq.RelatedTransactionId <= 0 {
+			log.Warnf(c, "[transactions.TransactionImportHandler] refund transaction \"index:%d\" must set related transaction id", i)
+			return nil, errs.ErrRelatedTransactionNotFound
 		}
 
 		if transactionCreateReq.Type == models.TRANSACTION_TYPE_MODIFY_BALANCE && transactionCreateReq.CategoryId != 0 {
@@ -2818,6 +2875,34 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 		}
 
 		newTransactionTagIdsMap[i] = tagIds
+	}
+
+	originalTransactionIdIndexes := make(map[int64]int, len(transactionImportReq.Transactions))
+
+	for i := 0; i < len(transactionImportReq.Transactions); i++ {
+		if transactionImportReq.Transactions[i].OriginalTransactionId != 0 {
+			originalTransactionIdIndexes[transactionImportReq.Transactions[i].OriginalTransactionId] = i
+		}
+	}
+
+	for i := 0; i < len(transactionImportReq.Transactions); i++ {
+		transactionCreateReq := transactionImportReq.Transactions[i]
+
+		if transactionCreateReq.Type != models.TRANSACTION_TYPE_REFUND {
+			continue
+		}
+
+		relatedTransactionIndex, exists := originalTransactionIdIndexes[transactionCreateReq.RelatedTransactionId]
+
+		if !exists {
+			log.Warnf(c, "[transactions.TransactionImportHandler] related transaction of refund transaction \"index:%d\" does not exist in the imported data", i)
+			return nil, errs.ErrRelatedTransactionNotFound
+		}
+
+		if transactionImportReq.Transactions[relatedTransactionIndex].Type != models.TRANSACTION_TYPE_EXPENSE {
+			log.Warnf(c, "[transactions.TransactionImportHandler] refund transaction \"index:%d\" can only refer to an expense transaction", i)
+			return nil, errs.ErrCannotRefundNonExpenseTransaction
+		}
 	}
 
 	user, err := a.users.GetUserById(c, uid)
@@ -2842,15 +2927,30 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 		newTransactions[i] = transaction
 	}
 
-	allUsedAccounts, err := a.getTransactionUsedAccounts(c, uid, newTransactions)
+	originalTransactionIds := make([]int64, len(newTransactions))
+
+	for i := 0; i < len(newTransactions); i++ {
+		originalTransactionIds[i] = transactionImportReq.Transactions[i].OriginalTransactionId
+	}
+
+	// a refund transaction must be created after the transaction which it refers to, and the related transaction id
+	// in the imported data must be replaced with the new transaction id of the imported transaction
+	orderedNewTransactions, orderedNewTransactionPositions, beforeCreateTransactions := services.OrderTransactionsForCreation(newTransactions, originalTransactionIds)
+	orderedNewTransactionTagIdsMap := make(map[int][]int64, len(orderedNewTransactions))
+
+	for i := 0; i < len(orderedNewTransactionPositions); i++ {
+		orderedNewTransactionTagIdsMap[i] = newTransactionTagIdsMap[orderedNewTransactionPositions[i]]
+	}
+
+	allUsedAccounts, err := a.getTransactionUsedAccounts(c, uid, orderedNewTransactions)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionImportHandler] failed to get transaction used accounts for user \"uid:%d\", because %s", uid, err.Error())
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
-	for i := 0; i < len(newTransactions); i++ {
-		transaction := newTransactions[i]
+	for i := 0; i < len(orderedNewTransactions); i++ {
+		transaction := orderedNewTransactions[i]
 		transactionEditable := user.CanEditTransactionByTransactionTime(transaction.TransactionTime, clientTimezone, allUsedAccounts[transaction.AccountId], allUsedAccounts[transaction.RelatedAccountId])
 
 		if !transactionEditable {
@@ -2859,7 +2959,7 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 		}
 	}
 
-	err = a.transactions.BatchCreateTransactions(c, user.Uid, newTransactions, newTransactionTagIdsMap, func(currentProcess float64) {
+	err = a.transactions.BatchCreateTransactions(c, user.Uid, orderedNewTransactions, orderedNewTransactionTagIdsMap, beforeCreateTransactions, func(currentProcess float64) {
 		a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, transactionImportReq.ClientSessionId, fmt.Sprintf("processing:%.2f", currentProcess))
 	})
 	count := len(newTransactions)
