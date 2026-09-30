@@ -32,6 +32,7 @@ export class Transaction implements TransactionInfoResponse {
     public editable: boolean;
     public relatedTransactionId: string = '0';
     public refundedAmount: number = 0;
+    public refunds: TransactionRefundInfoResponse[] = [];
 
     private _pictures?: TransactionPicture[];
     private _geoLocation?: TransactionGeoLocation;
@@ -352,6 +353,7 @@ export class Transaction implements TransactionInfoResponse {
 
         transaction.relatedTransactionId = transactionResponse.relatedTransactionId ?? '0';
         transaction.refundedAmount = transactionResponse.refundedAmount ?? 0;
+        transaction.refunds = transactionResponse.refunds ?? [];
 
         if (transactionResponse.category) {
             transaction.setCategory(TransactionCategory.of(transactionResponse.category));
@@ -673,6 +675,15 @@ export interface TransactionReconciliationStatementRequest {
 
 export type TransactionGeoLocationResponse = Coordinate;
 
+export interface TransactionRefundInfoResponse {
+    readonly id: string;
+    readonly time: number;
+    readonly utcOffset: number;
+    readonly amount: number;
+    readonly accountId: string;
+    readonly hideAmount: boolean;
+}
+
 export interface TransactionInfoResponse {
     readonly id: string;
     readonly timeSequenceId: string;
@@ -689,6 +700,7 @@ export interface TransactionInfoResponse {
     readonly destinationAmount: number;
     readonly relatedTransactionId?: string;
     readonly refundedAmount?: number;
+    readonly refunds?: TransactionRefundInfoResponse[];
     readonly hideAmount: boolean;
     readonly tagIds: string[];
     readonly tags?: TransactionTagInfoResponse[];

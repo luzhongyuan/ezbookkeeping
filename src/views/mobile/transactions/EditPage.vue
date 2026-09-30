@@ -91,6 +91,26 @@
                 v-if="showRefundedAmount"
             ></f7-list-item>
 
+            <template v-if="showRelatedTransactions">
+                <f7-list-item
+                    class="list-item-with-header-and-title"
+                    link="#" no-chevron
+                    :header="tt('Related Transactions')"
+                    :title="tt('Source Expense')"
+                    @click="openRelatedTransaction(relatedSourceExpenseId)"
+                    v-if="relatedSourceExpenseId"
+                ></f7-list-item>
+                <f7-list-item
+                    class="list-item-with-header-and-title"
+                    link="#" no-chevron
+                    :header="tt('Related Transactions')"
+                    :title="getRefundDisplayText(refund)"
+                    @click="openRelatedTransaction(refund.id)"
+                    v-for="refund in transaction.refunds"
+                    :key="refund.id"
+                ></f7-list-item>
+            </template>
+
             <f7-list-item
                 class="transaction-edit-amount text-color-primary"
                 link="#" no-chevron
@@ -566,7 +586,7 @@ import { SUPPORTED_IMAGE_EXTENSIONS } from '@/consts/file.ts';
 
 import { TransactionTemplate } from '@/models/transaction_template.ts';
 import type { TransactionPictureInfoBasicResponse } from '@/models/transaction_picture_info.ts';
-import { Transaction } from '@/models/transaction.ts';
+import { Transaction, type TransactionRefundInfoResponse } from '@/models/transaction.ts';
 
 import { isDefined } from '@/lib/common.ts';
 import { parseBigDecimal } from '@/lib/numeral.ts';
@@ -741,6 +761,22 @@ const canRefund = computed<boolean>(() => {
 
 const showRefundedAmount = computed<boolean>(() => {
     return transaction.value.type === TransactionType.Expense && transaction.value.refundedAmount > 0;
+});
+
+const relatedSourceExpenseId = computed<string | undefined>(() => {
+    if (pageTypeAndMode?.type !== TransactionEditPageType.Transaction || transaction.value.type !== TransactionType.Refund) {
+        return undefined;
+    }
+
+    return transaction.value.relatedTransactionId !== '0' ? transaction.value.relatedTransactionId : undefined;
+});
+
+const showRelatedTransactions = computed<boolean>(() => {
+    if (pageTypeAndMode?.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
+        return false;
+    }
+
+    return !!relatedSourceExpenseId.value || transaction.value.refunds.length > 0;
 });
 
 const destinationAmountClass = computed<Record<string, boolean>>(() => {
@@ -1495,6 +1531,19 @@ function refund(): void {
     }
 
     props.f7router.navigate(`/transaction/add?id=${transaction.value.id}&type=${TransactionType.Refund}`);
+}
+
+function openRelatedTransaction(transactionId: string): void {
+    if (pageTypeAndMode?.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View || !transactionId || transactionId === '0') {
+        return;
+    }
+
+    props.f7router.navigate(`/transaction/detail?id=${transactionId}`);
+}
+
+function getRefundDisplayText(refund: TransactionRefundInfoResponse): string {
+    const currency = accountsStore.allAccountsMap[refund.accountId]?.currency ?? sourceAccountCurrency.value;
+    return getDisplayAmount(parseBigDecimal(refund.amount), refund.hideAmount, currency);
 }
 
 function onUploadPicture(event: Event): void {

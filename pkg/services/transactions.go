@@ -524,30 +524,30 @@ func (s *TransactionService) GetTransactionsByTransactionIds(c core.Context, uid
 	return transactions, err
 }
 
-// GetRefundedAmountsByTransactionIds returns total refunded amounts of given transactions
-func (s *TransactionService) GetRefundedAmountsByTransactionIds(c core.Context, uid int64, transactionIds []int64) (map[int64]int64, error) {
+// GetRefundTransactionsByTransactionIds returns refund transactions of the given transactions, keyed by the related transaction id
+func (s *TransactionService) GetRefundTransactionsByTransactionIds(c core.Context, uid int64, transactionIds []int64) (map[int64][]*models.Transaction, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
 
-	refundedAmounts := make(map[int64]int64)
+	refundTransactions := make(map[int64][]*models.Transaction)
 
 	if len(transactionIds) <= 0 {
-		return refundedAmounts, nil
+		return refundTransactions, nil
 	}
 
 	var transactions []*models.Transaction
-	err := s.UserDataDB(uid).NewSession(c).Cols("related_transaction_id", "amount").Where("uid=? AND deleted=? AND related_transaction_id<>0", uid, false).In("related_transaction_id", transactionIds).Find(&transactions)
+	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND related_transaction_id<>0", uid, false).In("related_transaction_id", transactionIds).OrderBy("transaction_id").Find(&transactions)
 
 	if err != nil {
 		return nil, err
 	}
 
 	for i := 0; i < len(transactions); i++ {
-		refundedAmounts[transactions[i].RelatedTransactionId] += transactions[i].Amount
+		refundTransactions[transactions[i].RelatedTransactionId] = append(refundTransactions[transactions[i].RelatedTransactionId], transactions[i])
 	}
 
-	return refundedAmounts, nil
+	return refundTransactions, nil
 }
 
 // GetAllTransactionCount returns total count of transactions

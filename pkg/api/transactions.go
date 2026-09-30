@@ -1139,7 +1139,7 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 	transactionTagIds := allTransactionTagIds[transaction.TransactionId]
 	transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, transactionEditable)
 
-	if err := a.fillTransactionRefundedAmounts(c, uid, transactionResp); err != nil {
+	if err := a.fillTransactionRefunds(c, uid, transactionResp); err != nil {
 		return nil, err
 	}
 
@@ -1298,7 +1298,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 				transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 
-				if err := a.fillTransactionRefundedAmounts(c, uid, transactionResp); err != nil {
+				if err := a.fillTransactionRefunds(c, uid, transactionResp); err != nil {
 					return nil, err
 				}
 
@@ -1321,7 +1321,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
 	transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 
-	if err := a.fillTransactionRefundedAmounts(c, uid, transactionResp); err != nil {
+	if err := a.fillTransactionRefunds(c, uid, transactionResp); err != nil {
 		return nil, err
 	}
 
@@ -1548,7 +1548,7 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 
 	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 
-	if err := a.fillTransactionRefundedAmounts(c, uid, newTransactionResp); err != nil {
+	if err := a.fillTransactionRefunds(c, uid, newTransactionResp); err != nil {
 		return nil, err
 	}
 
@@ -3168,15 +3168,15 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 
 	sort.Sort(result)
 
-	if err := a.fillTransactionRefundedAmounts(c, user.Uid, result...); err != nil {
+	if err := a.fillTransactionRefunds(c, user.Uid, result...); err != nil {
 		return nil, err
 	}
 
 	return result, nil
 }
 
-// fillTransactionRefundedAmounts fills the refunded amount of the given transaction responses
-func (a *TransactionsApi) fillTransactionRefundedAmounts(c *core.WebContext, uid int64, transactionResponses ...*models.TransactionInfoResponse) *errs.Error {
+// fillTransactionRefunds fills the refunded amount and refund transactions of the given transaction responses
+func (a *TransactionsApi) fillTransactionRefunds(c *core.WebContext, uid int64, transactionResponses ...*models.TransactionInfoResponse) *errs.Error {
 	if len(transactionResponses) <= 0 {
 		return nil
 	}
@@ -3187,15 +3187,34 @@ func (a *TransactionsApi) fillTransactionRefundedAmounts(c *core.WebContext, uid
 		transactionIds = append(transactionIds, transactionResponses[i].Id)
 	}
 
-	refundedAmounts, err := a.transactions.GetRefundedAmountsByTransactionIds(c, uid, transactionIds)
+	refundTransactions, err := a.transactions.GetRefundTransactionsByTransactionIds(c, uid, transactionIds)
 
 	if err != nil {
-		log.Errorf(c, "[transactions.fillTransactionRefundedAmounts] failed to get refunded amounts for user \"uid:%d\", because %s", uid, err.Error())
+		log.Errorf(c, "[transactions.fillTransactionRefunds] failed to get refund transactions for user \"uid:%d\", because %s", uid, err.Error())
 		return errs.Or(err, errs.ErrOperationFailed)
 	}
 
 	for i := 0; i < len(transactionResponses); i++ {
-		transactionResponses[i].RefundedAmount = refundedAmounts[transactionResponses[i].Id]
+		transactionResponse := transactionResponses[i]
+		refunds := refundTransactions[transactionResponse.Id]
+
+		if len(refunds) <= 0 {
+			continue
+		}
+
+		transactionResponse.Refunds = make([]*models.TransactionRefundInfoResponse, 0, len(refunds))
+
+		for j := 0; j < len(refunds); j++ {
+			transactionResponse.RefundedAmount += refunds[j].Amount
+			transactionResponse.Refunds = append(transactionResponse.Refunds, &models.TransactionRefundInfoResponse{
+				Id:         refunds[j].TransactionId,
+				Time:       utils.GetUnixTimeFromTransactionTime(refunds[j].TransactionTime),
+				UtcOffset:  refunds[j].TimezoneUtcOffset,
+				Amount:     refunds[j].Amount,
+				AccountId:  refunds[j].AccountId,
+				HideAmount: refunds[j].HideAmount,
+			})
+		}
 	}
 
 	return nil

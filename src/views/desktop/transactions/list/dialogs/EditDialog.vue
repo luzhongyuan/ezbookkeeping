@@ -139,6 +139,22 @@
                                         {{ tt('Refunded Amount') }}: {{ getDisplayAmount(parseBigDecimal(transaction.refundedAmount), transaction.hideAmount, sourceAccountCurrency) }}
                                     </div>
                                 </v-col>
+                                <v-col cols="12" v-if="showRelatedTransactions">
+                                    <v-divider class="my-1"></v-divider>
+                                    <div class="text-body-small text-medium-emphasis mb-2">{{ tt('Related Transactions') }}</div>
+                                    <div class="d-flex flex-wrap ga-2">
+                                        <v-chip class="cursor-pointer" color="primary" variant="tonal" size="small"
+                                                v-if="relatedSourceExpenseId"
+                                                @click="openRelatedTransaction(relatedSourceExpenseId)">
+                                            {{ tt('Source Expense') }}
+                                        </v-chip>
+                                        <v-chip class="cursor-pointer" color="primary" variant="tonal" size="small"
+                                                v-for="refund in transaction.refunds" :key="refund.id"
+                                                @click="openRelatedTransaction(refund.id)">
+                                            {{ getRefundDisplayText(refund) }}
+                                        </v-chip>
+                                    </div>
+                                </v-col>
                                 <v-col cols="12" :md="6" v-if="transaction.type === TransactionType.Transfer">
                                     <amount-input class="transaction-edit-amount font-weight-bold" color="primary"
                                                   :currency="destinationAccountCurrency"
@@ -553,7 +569,7 @@ import { SUPPORTED_IMAGE_EXTENSIONS } from '@/consts/file.ts';
 
 import { TransactionTemplate } from '@/models/transaction_template.ts';
 import type { TransactionPictureInfoBasicResponse } from '@/models/transaction_picture_info.ts';
-import { Transaction } from '@/models/transaction.ts';
+import { Transaction, type TransactionRefundInfoResponse } from '@/models/transaction.ts';
 
 import { isDefined, isEquals } from '@/lib/common.ts';
 import {
@@ -727,6 +743,22 @@ const canRefund = computed<boolean>(() => {
 
 const showRefundedAmount = computed<boolean>(() => {
     return transaction.value.type === TransactionType.Expense && transaction.value.refundedAmount > 0;
+});
+
+const relatedSourceExpenseId = computed<string | undefined>(() => {
+    if (props.type !== TransactionEditPageType.Transaction || transaction.value.type !== TransactionType.Refund) {
+        return undefined;
+    }
+
+    return transaction.value.relatedTransactionId !== '0' ? transaction.value.relatedTransactionId : undefined;
+});
+
+const showRelatedTransactions = computed<boolean>(() => {
+    if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
+        return false;
+    }
+
+    return !!relatedSourceExpenseId.value || transaction.value.refunds.length > 0;
 });
 
 const mapTabEnabled = computed<boolean>(() => {
@@ -1115,6 +1147,26 @@ function edit(): void {
     }
 
     mode.value = TransactionEditPageMode.Edit;
+}
+
+function openRelatedTransaction(transactionId: string): void {
+    if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View || !transactionId || transactionId === '0') {
+        return;
+    }
+
+    // The host page holds the promise returned by the previous open() call, so settle it before this dialog loads the related transaction.
+    if (resolveFunc) {
+        resolveFunc();
+        resolveFunc = null;
+        rejectFunc = null;
+    }
+
+    open({ id: transactionId });
+}
+
+function getRefundDisplayText(refund: TransactionRefundInfoResponse): string {
+    const currency = accountsStore.allAccountsMap[refund.accountId]?.currency ?? sourceAccountCurrency.value;
+    return getDisplayAmount(parseBigDecimal(refund.amount), refund.hideAmount, currency);
 }
 
 function refund(): void {

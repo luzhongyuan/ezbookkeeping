@@ -416,6 +416,16 @@ type TransactionGeoLocationResponse struct {
 	Longitude float64 `json:"longitude"`
 }
 
+// TransactionRefundInfoResponse represents a view-object of a refund transaction
+type TransactionRefundInfoResponse struct {
+	Id         int64 `json:"id,string"`
+	Time       int64 `json:"time"`
+	UtcOffset  int16 `json:"utcOffset"`
+	Amount     int64 `json:"amount"`
+	AccountId  int64 `json:"accountId,string"`
+	HideAmount bool  `json:"hideAmount"`
+}
+
 // TransactionInfoResponse represents a view-object of transaction
 type TransactionInfoResponse struct {
 	Id                   int64                                    `json:"id,string"`
@@ -433,6 +443,7 @@ type TransactionInfoResponse struct {
 	DestinationAmount    *int64                                   `json:"destinationAmount,omitempty"`
 	RelatedTransactionId int64                                    `json:"relatedTransactionId,string,omitempty"`
 	RefundedAmount       int64                                    `json:"refundedAmount,omitempty"`
+	Refunds              []*TransactionRefundInfoResponse         `json:"refunds,omitempty"`
 	HideAmount           bool                                     `json:"hideAmount"`
 	TagIds               []string                                 `json:"tagIds"`
 	Tags                 []*TransactionTagInfoResponse            `json:"tags,omitempty"`
