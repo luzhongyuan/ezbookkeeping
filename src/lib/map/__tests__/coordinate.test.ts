@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { gcj02ToWgs84 } from '../coordinate.ts';
+import { gcj02ToWgs84, getCoordinateDistance } from '../coordinate.ts';
+
+describe('getCoordinateDistance', () => {
+    it('should return zero for the same coordinate', () => {
+        expect(getCoordinateDistance({ latitude: 31.230416, longitude: 121.473701 }, { latitude: 31.230416, longitude: 121.473701 }))
+            .toEqual(0);
+    });
+
+    it('should calculate the distance between two coordinates in meters', () => {
+        const distance = getCoordinateDistance({ latitude: 31.230416, longitude: 121.473701 }, { latitude: 39.908722, longitude: 116.397499 });
+
+        expect(distance).toBeGreaterThan(1060000);
+        expect(distance).toBeLessThan(1075000);
+    });
+
+    it('should be symmetric', () => {
+        const coordinate1 = { latitude: 31.230416, longitude: 121.473701 };
+        const coordinate2 = { latitude: 22.32204, longitude: 114.164419 };
+
+        expect(getCoordinateDistance(coordinate1, coordinate2)).toEqual(getCoordinateDistance(coordinate2, coordinate1));
+    });
+});
 
 describe('gcj02ToWgs84', () => {
     it('should convert a GCJ-02 coordinate in Beijing to WGS-84', () => {

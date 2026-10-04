@@ -33,6 +33,8 @@ var (
 // AmapApiProxyHandler returns amap api response
 func (p *AmapApiProxy) AmapApiProxyHandler(c *core.WebContext) (*httputil.ReverseProxy, *errs.Error) {
 	var targetUrl string
+	var applicationKey string
+	var stripRequestKey bool
 
 	if strings.HasPrefix(c.Request.RequestURI, "/_AMapService/v4/map/styles") {
 		targetUrl = amapCustomMapStylesUrl + strings.TrimPrefix(c.Request.URL.Path, "/_AMapService/v4/map/styles")
@@ -40,10 +42,31 @@ func (p *AmapApiProxy) AmapApiProxyHandler(c *core.WebContext) (*httputil.Revers
 		targetUrl = amapOverseasMapUrl + strings.TrimPrefix(c.Request.URL.Path, "/_AMapService/v3/vectormap")
 	} else {
 		targetUrl = amapRestApiUrl + strings.TrimPrefix(c.Request.URL.Path, "/_AMapService/")
+
+		// the amap web service apis (such as the place search and the reverse geocoding) only accept the key of
+		// "Web Service" platform, while the requests from the amap javascript api use the key of "JavaScript API"
+		// platform and must not be replaced, so the web service key is used only when no key is specified
+		if isAmapWebServicePath(c.Request.URL.Path) && !c.Request.URL.Query().Has("key") {
+			applicationKey = p.CurrentConfig().AmapWebServiceKey
+			stripRequestKey = true
+		}
+	}
+
+	if applicationKey == "" {
+		applicationKey = p.CurrentConfig().AmapApplicationKey
 	}
 
 	director := func(req *http.Request) {
-		targetRawUrl := fmt.Sprintf("%s?%s&jscode=%s", targetUrl, req.URL.RawQuery, p.CurrentConfig().AmapApplicationSecret)
+		query := req.URL.Query()
+
+		if stripRequestKey {
+			query.Del("key")
+		}
+
+		query.Set("jscode", p.CurrentConfig().AmapApplicationSecret)
+		req.URL.RawQuery = query.Encode()
+
+		targetRawUrl := fmt.Sprintf("%s?%s&key=%s", targetUrl, req.URL.RawQuery, applicationKey)
 		targetUrl, _ := url.Parse(targetRawUrl)
 
 		oldCookies := req.Cookies()
@@ -63,4 +86,9 @@ func (p *AmapApiProxy) AmapApiProxyHandler(c *core.WebContext) (*httputil.Revers
 	}
 
 	return &httputil.ReverseProxy{Director: director}, nil
+}
+
+func isAmapWebServicePath(path string) bool {
+	return strings.HasPrefix(path, "/_AMapService/v3/place/") || strings.HasPrefix(path, "/_AMapService/v5/place/") ||
+		strings.HasPrefix(path, "/_AMapService/v3/geocode/") || strings.HasPrefix(path, "/_AMapService/v5/geocode/")
 }

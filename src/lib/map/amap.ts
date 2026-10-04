@@ -4,7 +4,7 @@ import type { Coordinate } from '@/core/coordinate.ts';
 import type { MapProvider, MapInstance, MapCreateOptions, MapInstanceInitOptions, MapPlace } from './base.ts';
 
 import { isFunction, isArray } from '@/lib/common.ts';
-import { gcj02ToWgs84 } from '@/lib/map/coordinate.ts';
+import { gcj02ToWgs84, getCoordinateDistance } from '@/lib/map/coordinate.ts';
 import { asyncLoadAssets } from '@/lib/misc.ts';
 import services from '@/lib/services.ts';
 import {
@@ -13,6 +13,10 @@ import {
     getAmapApplicationSecret
 } from '@/lib/server_settings.ts';
 import logger from '@/lib/logger.ts';
+
+const SEARCH_RESULT_COUNT: number = 10;
+const NEARBY_DISTANCE_LIMIT: number = 50000;
+const REGION_CACHE_COORDINATE_TOLERANCE: number = 0.01;
 
 function parseAmapStringField(field: string | string[] | undefined): string | undefined {
     if (isArray(field)) {
@@ -85,6 +89,7 @@ export class AmapMapInstance implements MapInstance {
     private amapToolbar: unknown = null;
     private amapCenterPosition: unknown = null;
     private amapCenterMarker: unknown | null;
+    private regionByCoordinate: { latitude: number; longitude: number; region: string } | null = null;
 
     public constructor(options: MapCreateOptions) {
         this.dependencyLoaded = !!AmapMapProvider.AMap;
@@ -252,56 +257,144 @@ export class AmapMapInstance implements MapInstance {
         this.amapCenterMarker = null;
     }
 
-    public searchPlaces(keyword: string): Promise<MapPlace[]> {
-        return new Promise<MapPlace[]>((resolve, reject) => {
-            if (!AmapMapProvider.AMap) {
-                reject(new Error('AMap is not loaded'));
-                return;
+    public async searchPlaces(keyword: string): Promise<MapPlace[]> {
+        const center = this.getCurrentMapCenter();
+        const region = center ? await this.getRegionByCoordinate(center) : '';
+        const places = await this.searchPlacesByKeyword(keyword, region);
+
+        if (!center || places.length < 2) {
+            return places;
+        }
+
+        // the keyword search api of amap cannot sort the results by distance, so the places around the
+        // current map center are moved to the front of the result list after the search request is completed
+        const centerInWgs84 = gcj02ToWgs84(center);
+
+        return places.sort((place1: MapPlace, place2: MapPlace) => {
+            const distance1 = getCoordinateDistance(centerInWgs84, place1);
+            const distance2 = getCoordinateDistance(centerInWgs84, place2);
+
+            if (distance1 <= NEARBY_DISTANCE_LIMIT && distance2 <= NEARBY_DISTANCE_LIMIT) {
+                return distance1 - distance2;
+            } else if (distance1 <= NEARBY_DISTANCE_LIMIT) {
+                return -1;
+            } else if (distance2 <= NEARBY_DISTANCE_LIMIT) {
+                return 1;
             }
 
-            const AMap = AmapMapProvider.AMap;
-            const placeSearch = new AMap.PlaceSearch({
-                pageSize: 10,
-                pageIndex: 1
-            });
-
-            placeSearch.search(keyword, (status, result) => {
-                if (status !== 'complete' || !result || !result.poiList || !isArray(result.poiList.pois)) {
-                    if (status === 'no_data') {
-                        resolve([]);
-                        return;
-                    }
-
-                    reject(new Error('Failed to search places'));
-                    return;
-                }
-
-                const places: MapPlace[] = [];
-
-                for (const poi of result.poiList.pois) {
-                    if (!poi.location) {
-                        continue;
-                    }
-
-                    const wgs84Location = gcj02ToWgs84({
-                        latitude: poi.location.lat,
-                        longitude: poi.location.lng
-                    });
-
-                    places.push({
-                        name: parseAmapStringField(poi.name),
-                        address: parseAmapStringField(poi.address),
-                        province: parseAmapStringField(poi.pname),
-                        city: parseAmapStringField(poi.cityname),
-                        district: parseAmapStringField(poi.adname),
-                        latitude: wgs84Location.latitude,
-                        longitude: wgs84Location.longitude
-                    });
-                }
-
-                resolve(places);
-            });
+            // keep the original relevance order for the places which are not around the current map center
+            return 0;
         });
+    }
+
+    private async searchPlacesByKeyword(keyword: string, region: string): Promise<MapPlace[]> {
+        const params = new URLSearchParams();
+        params.set('keywords', keyword);
+        params.set('page_size', String(SEARCH_RESULT_COUNT));
+        params.set('page_num', '1');
+        params.set('show_fields', 'business');
+
+        if (region) {
+            params.set('region', region);
+        }
+
+        const url = `${services.generateAmapApiInternalProxyUrl()}/v5/place/text?${params.toString()}`;
+        const response = await fetch(url, { credentials: 'include' });
+        const result = await response.json();
+
+        if (!result || result.status !== '1' || !result.pois || !isArray(result.pois)) {
+            return [];
+        }
+
+        const places: MapPlace[] = [];
+
+        for (const poi of result.pois) {
+            const [ longitude, latitude ] = String(poi.location ?? '').split(',').map(Number);
+
+            if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+                continue;
+            }
+
+            const wgs84Location = gcj02ToWgs84({
+                latitude: latitude,
+                longitude: longitude
+            });
+
+            places.push({
+                name: parseAmapStringField(poi.name),
+                address: parseAmapStringField(poi.address),
+                province: parseAmapStringField(poi.pname),
+                city: parseAmapStringField(poi.cityname),
+                district: parseAmapStringField(poi.adname),
+                latitude: wgs84Location.latitude,
+                longitude: wgs84Location.longitude
+            });
+        }
+
+        return places;
+    }
+
+    // the keyword search api of amap supports neither "location" nor "sortrule", the only way to prefer the
+    // places around a coordinate is to pass the region (which is the district or the city of that coordinate)
+    private async getRegionByCoordinate(coordinate: Coordinate): Promise<string> {
+        if (this.regionByCoordinate
+            && Math.abs(this.regionByCoordinate.latitude - coordinate.latitude) <= REGION_CACHE_COORDINATE_TOLERANCE
+            && Math.abs(this.regionByCoordinate.longitude - coordinate.longitude) <= REGION_CACHE_COORDINATE_TOLERANCE
+        ) {
+            return this.regionByCoordinate.region;
+        }
+
+        const params = new URLSearchParams();
+        params.set('location', `${coordinate.longitude},${coordinate.latitude}`);
+        params.set('radius', '1000');
+        params.set('extensions', 'base');
+
+        let region = '';
+
+        try {
+            const url = `${services.generateAmapApiInternalProxyUrl()}/v3/geocode/regeo?${params.toString()}`;
+            const response = await fetch(url, { credentials: 'include' });
+            const result = await response.json();
+            const addressComponent = result?.regeocode?.addressComponent;
+
+            region = parseAmapStringField(addressComponent?.adcode) || parseAmapStringField(addressComponent?.citycode) || '';
+        } catch (error) {
+            logger.warn('amap reverse geocode failed', error);
+        }
+
+        this.regionByCoordinate = {
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            region: region
+        };
+
+        return region;
+    }
+
+    private getCurrentMapCenter(): Coordinate | null {
+        if (!this.amapInstance || !isFunction(this.amapInstance.getCenter)) {
+            return null;
+        }
+
+        const center = this.amapInstance.getCenter();
+
+        if (!center || !isFunction(center.getLng) || !isFunction(center.getLat)) {
+            return null;
+        }
+
+        const longitude = Number(center.getLng());
+        const latitude = Number(center.getLat());
+
+        if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+            return null;
+        }
+
+        // the map has not been located yet if the center is still the initial coordinate
+        if (!longitude && !latitude) {
+            return null;
+        }
+
+        return { latitude: latitude, longitude: longitude };
     }
 
     public zoomIn(): void {

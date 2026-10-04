@@ -940,7 +940,7 @@ export default {
         return `${getBasePath()}${BASE_QRCODE_PATH}/${qrCodeName}.png`;
     },
     generateAmapJavascriptUrl: (callbackFnName: string): string => {
-        return `${AMAP_JAVASCRIPT_URL}&key=${getAmapApplicationKey()}&plugin=AMap.ToolBar,AMap.PlaceSearch&callback=${callbackFnName}`;
+        return `${AMAP_JAVASCRIPT_URL}&key=${getAmapApplicationKey()}&plugin=AMap.ToolBar&callback=${callbackFnName}`;
     },
     generateAmapApiInternalProxyUrl: (): string => {
         return `${window.location.origin}${getBasePath()}${BASE_AMAP_API_PROXY_URL_PATH}`;

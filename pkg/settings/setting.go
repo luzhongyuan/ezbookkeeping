@@ -480,6 +480,7 @@ type Config struct {
 	// It is empty if no removed map provider is configured, the map is disabled in this case.
 	DeprecatedMapProvider          string
 	AmapApplicationKey             string
+	AmapWebServiceKey              string
 	AmapSecurityVerificationMethod string
 	AmapApplicationSecret          string
 	AmapApiExternalProxyUrl        string
@@ -1235,6 +1236,7 @@ func loadMapConfiguration(config *Config, configFile *ini.File, sectionName stri
 	}
 
 	config.AmapApplicationKey = getConfigItemStringValue(configFile, sectionName, "amap_application_key")
+	config.AmapWebServiceKey = getConfigItemStringValue(configFile, sectionName, "amap_web_service_key")
 
 	amapSecurityVerificationMethod := getConfigItemStringValue(configFile, sectionName, "amap_security_verification_method")
 

@@ -7,6 +7,19 @@ const OFFSET: number = 0.00669342162296594323;
 const COORDINATE_SCALE: number = 6;
 const MAX_INVERSE_ITERATIONS: number = 10;
 const INVERSE_TOLERANCE: number = 1e-7;
+const EARTH_RADIUS: number = 6371008.8;
+
+export function getCoordinateDistance(coordinate1: Coordinate, coordinate2: Coordinate): number {
+    const latitude1 = (coordinate1.latitude / 180.0) * PI;
+    const latitude2 = (coordinate2.latitude / 180.0) * PI;
+    const latitudeDelta = ((coordinate2.latitude - coordinate1.latitude) / 180.0) * PI;
+    const longitudeDelta = ((coordinate2.longitude - coordinate1.longitude) / 180.0) * PI;
+    const sinLatitude = Math.sin(latitudeDelta / 2.0);
+    const sinLongitude = Math.sin(longitudeDelta / 2.0);
+    const haversine = sinLatitude * sinLatitude + Math.cos(latitude1) * Math.cos(latitude2) * sinLongitude * sinLongitude;
+
+    return 2.0 * EARTH_RADIUS * Math.asin(Math.min(1.0, Math.sqrt(haversine)));
+}
 
 export function gcj02ToWgs84(coordinate: Coordinate): Coordinate {
     const latitude = coordinate.latitude;
