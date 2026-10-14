@@ -150,6 +150,7 @@
         <f7-actions close-by-outside-click close-on-escape :opened="showAccountMoreActionSheet" @actions:closed="showAccountMoreActionSheet = false">
             <f7-actions-group v-if="accountForMoreActionSheet && accountForMoreActionSheet.type === AccountType.SingleAccount.type">
                 <f7-actions-button @click="showReconciliationStatement(accountForMoreActionSheet)">{{ tt('Reconciliation Statement') }}</f7-actions-button>
+                <f7-actions-button @click="modifyBalance(accountForMoreActionSheet)">{{ tt('Modify Balance') }}</f7-actions-button>
                 <f7-actions-button @click="updateLastReconciledTime(accountForMoreActionSheet)" v-if="useLastReconciledTime">{{ tt('Mark as Reconciled') }}</f7-actions-button>
             </f7-actions-group>
             <f7-actions-group v-if="accountForMoreActionSheet && accountForMoreActionSheet.type === AccountType.SingleAccount.type">
@@ -162,6 +163,7 @@
                                   v-show="showHidden || !subAccount.hidden">
                     <f7-actions-label>{{ subAccount.name }}</f7-actions-label>
                     <f7-actions-button @click="showReconciliationStatement(subAccount)">{{ tt('Reconciliation Statement') }}</f7-actions-button>
+                    <f7-actions-button @click="modifyBalance(subAccount)">{{ tt('Modify Balance') }}</f7-actions-button>
                     <f7-actions-button @click="updateLastReconciledTime(subAccount)" v-if="useLastReconciledTime">{{ tt('Mark as Reconciled') }}</f7-actions-button>
                     <f7-actions-button @click="moveAllTransactions(subAccount)">{{ tt('Move All Transactions') }}</f7-actions-button>
                     <f7-actions-button color="red" @click="showPasswordSheetForClearAllTransaction(subAccount)">{{ tt('Clear All Transactions') }}</f7-actions-button>
@@ -382,6 +384,17 @@ function showReconciliationStatement(account: Account | null): void {
     }
 
     props.f7router.navigate('/account/reconciliation_statements?accountId=' + account.id);
+    showAccountMoreActionSheet.value = false;
+    accountForMoreActionSheet.value = null;
+}
+
+function modifyBalance(account: Account | null): void {
+    if (!account) {
+        showAlert('An error occurred');
+        return;
+    }
+
+    props.f7router.navigate('/account/reconciliation_statements?accountId=' + account.id + '&openBalanceEditor=true');
     showAccountMoreActionSheet.value = false;
     accountForMoreActionSheet.value = null;
 }

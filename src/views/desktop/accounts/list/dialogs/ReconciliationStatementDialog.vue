@@ -523,7 +523,7 @@ function getTransactionTypeColor(transaction: TransactionReconciliationStatement
     }
 }
 
-function open(options: { accountId: string, startTime: number, endTime: number }): Promise<void> {
+function open(options: { accountId: string, startTime: number, endTime: number, openBalanceEditor?: boolean }): Promise<void> {
     updatePageOpenTime();
     accountId.value = options.accountId;
     startTime.value = options.startTime;
@@ -550,6 +550,10 @@ function open(options: { accountId: string, startTime: number, endTime: number }
     }).then(result => {
         setReconciliationStatements(result);
         loading.value = false;
+
+        if (options.openBalanceEditor) {
+            updateClosingBalance();
+        }
     }).catch(error => {
         loading.value = false;
 

@@ -265,6 +265,10 @@
                                                             <v-menu activator="parent" :open-on-hover="true">
                                                                 <v-list>
                                                                     <v-list-item class="text-body-medium" density="compact"
+                                                                                 :title="tt('Modify Balance')"
+                                                                                 :prepend-icon="mdiScaleBalance"
+                                                                                 @click="showReconciliationStatementDialog(element.getAccountOrSubAccount(activeSubAccount[element.id]), undefined, true)"></v-list-item>
+                                                                    <v-list-item class="text-body-medium" density="compact"
                                                                                  :title="tt('Mark as Reconciled')"
                                                                                  :prepend-icon="mdiReceiptTextCheckOutline"
                                                                                  @click="updateLastReconciledTime(element.getAccountOrSubAccount(activeSubAccount[element.id]))"
@@ -383,6 +387,7 @@ import {
     mdiDeleteOutline,
     mdiListBoxOutline,
     mdiInvoiceListOutline,
+    mdiScaleBalance,
     mdiDrag,
     mdiDotsVertical
 } from '@mdi/js';
@@ -435,6 +440,7 @@ const activeAccountCategoryType = ref<number>(defaultAccountCategory.value.type)
 const activeTab = ref<string>('accountPage');
 const activeSubAccount = ref<Record<string, string>>({});
 const accountToShowReconciliationStatement = ref<Account | null>(null);
+const openBalanceEditorAfterDateRangeSelected = ref<boolean>(false);
 const alwaysShowNav = ref<boolean>(lgAndUp.value);
 const showNav = ref<boolean>(lgAndUp.value);
 const showAccountsIncludedInTotalDialog = ref<boolean>(false);
@@ -562,7 +568,7 @@ function edit(account: Account): void {
     });
 }
 
-function showReconciliationStatementDialog(account: Account, dateRangeType?: number): void {
+function showReconciliationStatementDialog(account: Account, dateRangeType?: number, openBalanceEditor = false): void {
     if (!isNumber(dateRangeType)) {
         const defualtDateRange = DateRange.valueOf(settingsStore.appSettings.reconciliationStatementButtonDefaultDateRangeTypeInDesktop);
 
@@ -579,6 +585,7 @@ function showReconciliationStatementDialog(account: Account, dateRangeType?: num
 
     if (!isNumber(dateRangeType) || dateRangeType === DateRange.Custom.type) {
         accountToShowReconciliationStatement.value = account;
+        openBalanceEditorAfterDateRangeSelected.value = openBalanceEditor;
         showCustomDateRangeDialog.value = true;
         return;
     }
@@ -600,7 +607,8 @@ function showReconciliationStatementDialog(account: Account, dateRangeType?: num
     reconciliationStatementDialog.value?.open({
         accountId: account.id,
         startTime: dateRange.minTime,
-        endTime: dateRange.maxTime
+        endTime: dateRange.maxTime,
+        openBalanceEditor
     });
 }
 
@@ -766,10 +774,12 @@ function onCustomDateRangeChanged(minUnixTime: number, maxUnixTime: number): voi
     reconciliationStatementDialog.value?.open({
         accountId: accountToShowReconciliationStatement.value.id,
         startTime: minUnixTime,
-        endTime: maxUnixTime
+        endTime: maxUnixTime,
+        openBalanceEditor: openBalanceEditorAfterDateRangeSelected.value
     });
 
     accountToShowReconciliationStatement.value = null;
+    openBalanceEditorAfterDateRangeSelected.value = false;
 }
 
 function onShowDateRangeError(message: string): void {

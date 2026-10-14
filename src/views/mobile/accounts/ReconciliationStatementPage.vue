@@ -474,6 +474,7 @@ const showCustomDateRangeSheet = ref<boolean>(false);
 const showNewClosingBalanceSheet = ref<boolean>(false);
 const showMoreActionSheet = ref<boolean>(false);
 const showDeleteActionSheet = ref<boolean>(false);
+const openBalanceEditorAfterLoad = ref<boolean>(false);
 const virtualDataItems = ref<ReconciliationStatementVirtualListData>({
     items: [],
     topPosition: 0
@@ -535,6 +536,7 @@ function init(): void {
     finishQuery.value = false;
     loading.value = false;
     accountId.value = query['accountId'] || '';
+    openBalanceEditorAfterLoad.value = query['openBalanceEditor'] === 'true';
     startTime.value = defaultDateRange?.minTime || 0;
     endTime.value = defaultDateRange?.maxTime || 0;
     reconciliationStatements.value = undefined;
@@ -544,10 +546,22 @@ function init(): void {
     Promise.all([
         accountsStore.loadAllAccounts({ force: false }),
         transactionCategoriesStore.loadAllCategories({ force: false })
-    ]).catch(error => {
+    ]).then(() => {
+        nextTick(() => {
+            nextTick(maybeReloadForBalanceEditor);
+        });
+    }).catch(error => {
         loadingError.value = error;
         showToast(error.message || error);
     });
+}
+
+function maybeReloadForBalanceEditor(): void {
+    if (!openBalanceEditorAfterLoad.value || finishQuery.value || showCustomDateRangeSheet.value || !startTime.value || !endTime.value) {
+        return;
+    }
+
+    reload(false);
 }
 
 function initDateFilter(): void {
@@ -609,6 +623,7 @@ function changeCustomDateFilter(minTime: number, maxTime: number): void {
     startTime.value = minTime;
     endTime.value = maxTime;
     showCustomDateRangeSheet.value = false;
+    nextTick(maybeReloadForBalanceEditor);
 }
 
 function reload(force: boolean): void {
@@ -630,6 +645,11 @@ function reload(force: boolean): void {
 
         loading.value = false;
         setReconciliationStatements(result);
+
+        if (openBalanceEditorAfterLoad.value) {
+            openBalanceEditorAfterLoad.value = false;
+            updateClosingBalance();
+        }
     }).catch(error => {
         loading.value = false;
 
