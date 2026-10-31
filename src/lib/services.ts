@@ -8,12 +8,12 @@ import type {
 import type {
     VersionInfo
 } from '@/core/version.ts';
-import type {
-    ImportFileTypeSupportedAdditionalOptions
-} from '@/core/file.ts';
 import {
     TransactionType
 } from '@/core/transaction.ts';
+import type {
+    ImportFileTypeSupportedAdditionalOptions
+} from '@/core/import_transaction.ts';
 
 import {
     BASE_API_URL_PATH,
@@ -71,7 +71,9 @@ import type {
     TransactionMoveBetweenAccountsRequest,
     TransactionDeleteRequest,
     TransactionBatchDeleteRequest,
+    TransactionCreateBatchRequest,
     TransactionImportRequest,
+    TransactionImportResponse,
     TransactionListByMaxTimeRequest,
     TransactionListInMonthByPageRequest,
     TransactionAllListRequest,
@@ -80,6 +82,8 @@ import type {
     TransactionInfoPageWrapperResponse2,
     TransactionReconciliationStatementRequest,
     TransactionReconciliationStatementResponse,
+    TransactionUnreconciledCountRequest,
+    TransactionUnreconciledCountResponse,
     TransactionStatisticRequest,
     TransactionStatisticResponse,
     TransactionStatisticTrendsRequest,
@@ -176,13 +180,22 @@ import type {
     UserApplicationCloudSettingsUpdateRequest
 } from '@/models/user_app_cloud_setting.ts';
 import type {
-    RecognizedTransactionResponse
+    RecognizedTransactionResponse,
+    CodingAssistantRequest,
+    CodingAssistantResponse
 } from '@/models/large_language_model.ts';
 import type {
     UserCustomIconInfoResponse,
     UserCustomIconMoveRequest,
     UserCustomIconDeleteRequest
 } from '@/models/user_custom_icon.ts';
+import type {
+    ImportPresetInfoResponse,
+    ImportPresetCreateRequest,
+    ImportPresetModifyRequest,
+    ImportPresetMoveRequest,
+    ImportPresetDeleteRequest
+} from '@/models/import_preset.ts';
 
 import {
     getCurrentToken,
@@ -270,7 +283,7 @@ axios.interceptors.response.use(response => {
 
     return response;
 }, error => {
-    if ('cancelableUuid' in error.response.config && error.response.config.cancelableUuid && cancelableRequests[error.response.config.cancelableUuid]) {
+    if (error.response && 'cancelableUuid' in error.response.config && error.response.config.cancelableUuid && cancelableRequests[error.response.config.cancelableUuid]) {
         logger.debug('Response canceled by user request, url: ' + error.response.config.url + ', cancelableUuid: ' + error.response.config.cancelableUuid);
         delete cancelableRequests[error.response.config.cancelableUuid];
         return Promise.reject({ canceled: true });
@@ -542,6 +555,9 @@ export default {
     getReconciliationStatements: (req: TransactionReconciliationStatementRequest): ApiResponsePromise<TransactionReconciliationStatementResponse> => {
         return axios.get<ApiResponse<TransactionReconciliationStatementResponse>>(`v1/transactions/reconciliation_statements.json?account_id=${req.accountId}&start_time=${req.startTime}&end_time=${req.endTime}`);
     },
+    getUnreconciledTransactionCounts: (req: TransactionUnreconciledCountRequest): ApiResponsePromise<TransactionUnreconciledCountResponse> => {
+        return axios.get<ApiResponse<TransactionUnreconciledCountResponse>>(`v1/transactions/unreconciled_transaction_counts.json?account_ids=${req.accountIds.join(',')}`);
+    },
     getTransactionStatistics: (req: TransactionStatisticRequest): ApiResponsePromise<TransactionStatisticResponse> => {
         const queryParams: string[] = [];
 
@@ -657,6 +673,9 @@ export default {
     modifyTransaction: (req: TransactionModifyRequest): ApiResponsePromise<TransactionInfoResponse> => {
         return axios.post<ApiResponse<TransactionInfoResponse>>('v1/transactions/modify.json', req);
     },
+    addTransactionBatch: (req: TransactionCreateBatchRequest): ApiResponsePromise<TransactionInfoResponse[]> => {
+        return axios.post<ApiResponse<TransactionInfoResponse[]>>('v1/transactions/add_batch.json', req);
+    },
     batchUpdateTransactionCategories: (req: TransactionBatchUpdateCategoryRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transactions/batch_update/category.json', req, {
             timeout: DEFAULT_BATCH_UPDATE_TRANSACTIONS_API_TIMEOUT
@@ -751,13 +770,13 @@ export default {
             cancelableUuid: cancelableUuid
         } as ApiRequestConfig);
     },
-    importTransactions: (req: TransactionImportRequest): ApiResponsePromise<number> => {
-        return axios.post<ApiResponse<number>>('v1/transactions/import.json', req, {
+    importTransactions: (req: TransactionImportRequest): ApiResponsePromise<TransactionImportResponse> => {
+        return axios.post<ApiResponse<TransactionImportResponse>>('v1/transactions/import.json', req, {
             timeout: DEFAULT_IMPORT_API_TIMEOUT
         } as ApiRequestConfig);
     },
-    getImportTransactionsProcess: (clientSessionId: string): ApiResponsePromise<number | null> => {
-        return axios.get<ApiResponse<number | null>>('v1/transactions/import/process.json?client_session_id=' + clientSessionId, {
+    getImportTransactionsProcess: (clientSessionId: string): ApiResponsePromise<TransactionImportResponse | null> => {
+        return axios.get<ApiResponse<TransactionImportResponse | null>>('v1/transactions/import/process.json?client_session_id=' + clientSessionId, {
             ignoreError: true
         } as ApiRequestConfig);
     },
@@ -895,6 +914,12 @@ export default {
             cancelableUuid: cancelableUuid
         } as ApiRequestConfig);
     },
+    generateCode: (req: CodingAssistantRequest, cancelableUuid?: string): ApiResponsePromise<CodingAssistantResponse> => {
+        return axios.post<ApiResponse<CodingAssistantResponse>>('v1/llm/code/generate.json', req, {
+            timeout: DEFAULT_LLM_API_TIMEOUT,
+            cancelableUuid: cancelableUuid
+        } as ApiRequestConfig);
+    },
     getAllUserCustomIcons: (): ApiResponsePromise<UserCustomIconInfoResponse[]> => {
         return axios.get<ApiResponse<UserCustomIconInfoResponse[]>>('v1/custom_icons/list.json');
     },
@@ -911,6 +936,24 @@ export default {
     },
     deleteUserCustomIcon: (req: UserCustomIconDeleteRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/custom_icons/delete.json', req);
+    },
+    getImportPresets: (): ApiResponsePromise<ImportPresetInfoResponse[]> => {
+        return axios.get<ApiResponse<ImportPresetInfoResponse[]>>('v1/import_presets/list.json');
+    },
+    getImportPreset: ({ id }: { id: string }): ApiResponsePromise<ImportPresetInfoResponse> => {
+        return axios.get<ApiResponse<ImportPresetInfoResponse>>('v1/import_presets/get.json?id=' + id);
+    },
+    addImportPreset: (req: ImportPresetCreateRequest): ApiResponsePromise<ImportPresetInfoResponse> => {
+        return axios.post<ApiResponse<ImportPresetInfoResponse>>('v1/import_presets/add.json', req);
+    },
+    modifyImportPreset: (req: ImportPresetModifyRequest): ApiResponsePromise<ImportPresetInfoResponse> => {
+        return axios.post<ApiResponse<ImportPresetInfoResponse>>('v1/import_presets/modify.json', req);
+    },
+    moveImportPreset: (req: ImportPresetMoveRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/import_presets/move.json', req);
+    },
+    deleteImportPreset: (req: ImportPresetDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/import_presets/delete.json', req);
     },
     getLatestExchangeRates: (param: { ignoreError?: boolean }): ApiResponsePromise<LatestExchangeRateResponse> => {
         return axios.get<ApiResponse<LatestExchangeRateResponse>>('v1/exchange_rates/latest.json', {

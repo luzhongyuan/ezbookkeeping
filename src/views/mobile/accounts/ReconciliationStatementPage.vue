@@ -530,11 +530,22 @@ function getTransactionDomId(transaction: TransactionReconciliationStatementResp
 
 function init(): void {
     const query = props.f7route.query;
+    const initialDateRangeType = query['dateType'] ? parseInt(query['dateType']) : undefined;
+    const initialStartTime = query['startTime'] ? parseInt(query['startTime']) : undefined;
+    const initialEndTime = query['endTime'] ? parseInt(query['endTime']) : undefined;
     const defaultDateRange = getDateRangeByDateType(queryDateRangeType.value, firstDayOfWeek.value, fiscalYearStart.value);
+
+    if (isDefined(initialDateRangeType) && initialDateRangeType !== DateRange.Custom.type) {
+        loading.value = true;
+    } else if (isDefined(initialDateRangeType) && initialDateRangeType === DateRange.Custom.type && isDefined(initialStartTime) && isDefined(initialEndTime) && initialStartTime > 0 && initialEndTime >= initialStartTime) {
+        loading.value = true;
+    } else {
+        loading.value = false;
+    }
 
     updatePageOpenTime();
     finishQuery.value = false;
-    loading.value = false;
+
     accountId.value = query['accountId'] || '';
     openBalanceEditorAfterLoad.value = query['openBalanceEditor'] === 'true';
     startTime.value = defaultDateRange?.minTime || 0;
@@ -547,10 +558,25 @@ function init(): void {
         accountsStore.loadAllAccounts({ force: false }),
         transactionCategoriesStore.loadAllCategories({ force: false })
     ]).then(() => {
+        let autoReload: boolean = false;
+
+        if (isDefined(initialDateRangeType) && initialDateRangeType !== DateRange.Custom.type) {
+            changeDateFilter(initialDateRangeType);
+            autoReload = true;
+        } else if (isDefined(initialDateRangeType) && initialDateRangeType === DateRange.Custom.type && isDefined(initialStartTime) && isDefined(initialEndTime) && initialStartTime > 0 && initialEndTime >= initialStartTime) {
+            changeCustomDateFilter(initialStartTime, initialEndTime);
+            autoReload = true;
+        }
+
+        if (autoReload) {
+            reload(false);
+        }
+
         nextTick(() => {
             nextTick(maybeReloadForBalanceEditor);
         });
     }).catch(error => {
+        loading.value = false;
         loadingError.value = error;
         showToast(error.message || error);
     });

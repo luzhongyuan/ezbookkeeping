@@ -61,6 +61,12 @@
                 </router-link>
             </li>
             <li class="nav-link">
+                <router-link to="/presets/import/list">
+                    <v-icon class="nav-item-icon" :icon="mdiFileTableBoxOutline"/>
+                    <span class="nav-item-title">{{ tt('Import Presets') }}</span>
+                </router-link>
+            </li>
+            <li class="nav-link">
                 <router-link to="/settings/user/data_management">
                     <v-icon class="nav-item-icon" :icon="mdiDatabaseCogOutline"/>
                     <span class="nav-item-title">{{ tt('Data Management') }}</span>
@@ -108,6 +114,12 @@
                     <span class="nav-item-title">{{ tt('Browser Cache Management') }}</span>
                 </router-link>
             </li>
+            <li class="nav-link" v-if="isLanguagePreviewEnabled()">
+                <router-link to="/settings/developer_tools">
+                    <v-icon class="nav-item-icon" :icon="mdiCodeBraces"/>
+                    <span class="nav-item-title">{{ tt('Developer Tools') }}</span>
+                </router-link>
+            </li>
         </template>
 
         <template #content>
@@ -122,7 +134,11 @@ import { useRoute } from 'vue-router';
 
 import { useI18n } from '@/locales/helpers.ts';
 
-import { isUserCustomIconEnabled, isUserScheduledTransactionEnabled } from '@/lib/server_settings.ts';
+import {
+    isUserCustomIconEnabled,
+    isUserScheduledTransactionEnabled,
+    isLanguagePreviewEnabled
+} from '@/lib/server_settings.ts';
 
 import {
     mdiAccountOutline,
@@ -133,13 +149,15 @@ import {
     mdiClipboardTextOutline,
     mdiClipboardTextClockOutline,
     mdiShapePlusOutline,
+    mdiFileTableBoxOutline,
     mdiDatabaseCogOutline,
     mdiCogOutline,
     mdiLockOpenOutline,
     mdiChartPieOutline,
     mdiCloudOutline,
     mdiSwapHorizontal,
-    mdiDatabaseClockOutline
+    mdiDatabaseClockOutline,
+    mdiCodeBraces
 } from '@mdi/js';
 
 const route = useRoute();

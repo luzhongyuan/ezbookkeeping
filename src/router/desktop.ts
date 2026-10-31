@@ -29,6 +29,8 @@ import TransactionTemplateListPage from '@/views/desktop/templates/ListPage.vue'
 
 import UserCustomIconListPage from '@/views/desktop/customicons/ListPage.vue';
 
+import ImportPresetsListPage from '@/views/desktop/presets/ImportPresetsListPage.vue';
+
 import OverviewLayoutEditorPage from '@/views/desktop/overview/LayoutEditorPage.vue';
 
 import SettingsPageLayout from '@/views/desktop/settings/SettingsPageLayout.vue';
@@ -41,6 +43,7 @@ import ApplicationLockPage from '@/views/desktop/settings/ApplicationLockPage.vu
 import StatisticsSettingPage from '@/views/desktop/settings/StatisticsSettingPage.vue';
 import ApplicationCloudSyncSettingsPage from '@/views/desktop/settings/ApplicationCloudSyncSettingsPage.vue';
 import BrowserCacheSettingPage from '@/views/desktop/settings/BrowserCacheSettingPage.vue';
+import DeveloperToolsPage from '@/views/desktop/settings/DeveloperToolsPage.vue';
 
 import ExchangeRatesListPage from '@/views/desktop/exchangerates/ListPage.vue';
 
@@ -199,6 +202,11 @@ const router = createRouter({
                     beforeEnter: checkLogin
                 },
                 {
+                    path: '/presets/import/list',
+                    component: ImportPresetsListPage,
+                    beforeEnter: checkLogin
+                },
+                {
                     path: '/settings/user/basic',
                     component: UserBasicSettingPage,
                     beforeEnter: checkLogin
@@ -241,6 +249,11 @@ const router = createRouter({
                 {
                     path: '/settings/browser_cache',
                     component: BrowserCacheSettingPage,
+                    beforeEnter: checkLogin
+                },
+                {
+                    path: '/settings/developer_tools',
+                    component: DeveloperToolsPage,
                     beforeEnter: checkLogin
                 },
                 {

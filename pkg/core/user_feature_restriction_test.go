@@ -55,6 +55,34 @@ func TestUserFeatureRestrictionsContains(t *testing.T) {
 	assert.False(t, featureRestrictions.Contains(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO))
 }
 
+func TestUserFeatureRestrictionsContainsAll(t *testing.T) {
+	var featureRestrictions UserFeatureRestrictions
+	assert.False(t, featureRestrictions.ContainsAll(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)))
+
+	featureRestrictions = featureRestrictions.Add(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)
+	assert.True(t, featureRestrictions.ContainsAll(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)))
+	assert.False(t, featureRestrictions.ContainsAll(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO)))
+
+	featureRestrictions = featureRestrictions.Add(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO)
+	assert.True(t, featureRestrictions.ContainsAll(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD, USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO)))
+	assert.False(t, featureRestrictions.ContainsAll(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD, USER_FEATURE_RESTRICTION_TYPE_UPDATE_EMAIL)))
+}
+
+func TestUserFeatureRestrictionsContainsAny(t *testing.T) {
+	var featureRestrictions UserFeatureRestrictions
+	assert.False(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)))
+
+	featureRestrictions = featureRestrictions.Add(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)
+	assert.True(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)))
+	assert.True(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD, USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO)))
+	assert.False(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO, USER_FEATURE_RESTRICTION_TYPE_UPDATE_AVATAR)))
+
+	featureRestrictions = featureRestrictions.Add(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO)
+	assert.True(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD, USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO)))
+	assert.True(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD, USER_FEATURE_RESTRICTION_TYPE_UPDATE_EMAIL)))
+	assert.False(t, featureRestrictions.ContainsAny(FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_AVATAR, USER_FEATURE_RESTRICTION_TYPE_REVOKE_OTHER_SESSION)))
+}
+
 func TestUserFeatureRestrictionsString(t *testing.T) {
 	var featureRestrictions UserFeatureRestrictions
 	expectedValue := ""
@@ -97,6 +125,32 @@ func TestUserFeatureRestrictionsString(t *testing.T) {
 	assert.Equal(t, expectedValue, actualValue)
 }
 
+func TestFromUserFeatureRestrictionTypes(t *testing.T) {
+	expectedValue := UserFeatureRestrictions(0)
+	actualValue := FromUserFeatureRestrictionTypes()
+	assert.Equal(t, expectedValue, actualValue)
+
+	expectedValue = UserFeatureRestrictions(1)
+	actualValue = FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD)
+	assert.Equal(t, expectedValue, actualValue)
+
+	expectedValue = UserFeatureRestrictions(3)
+	actualValue = FromUserFeatureRestrictionTypes(USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD, USER_FEATURE_RESTRICTION_TYPE_UPDATE_EMAIL)
+	assert.Equal(t, expectedValue, actualValue)
+
+	expectedValue = UserFeatureRestrictions(255)
+	actualValue = FromUserFeatureRestrictionTypes(
+		USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD,
+		USER_FEATURE_RESTRICTION_TYPE_UPDATE_EMAIL,
+		USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO,
+		USER_FEATURE_RESTRICTION_TYPE_UPDATE_AVATAR,
+		USER_FEATURE_RESTRICTION_TYPE_REVOKE_OTHER_SESSION,
+		USER_FEATURE_RESTRICTION_TYPE_ENABLE_2FA,
+		USER_FEATURE_RESTRICTION_TYPE_DISABLE_2FA,
+		USER_FEATURE_RESTRICTION_TYPE_FORGET_PASSWORD)
+	assert.Equal(t, expectedValue, actualValue)
+}
+
 func TestParseUserFeatureRestrictions(t *testing.T) {
 	expectedValue := UserFeatureRestrictions(0)
 	actualValue := ParseUserFeatureRestrictions("")
@@ -107,14 +161,14 @@ func TestParseUserFeatureRestrictions(t *testing.T) {
 	assert.Equal(t, expectedValue, actualValue)
 
 	expectedValue = UserFeatureRestrictions(1)
-	actualValue = ParseUserFeatureRestrictions("1,20")
+	actualValue = ParseUserFeatureRestrictions("1,50")
 	assert.Equal(t, expectedValue, actualValue)
 
 	expectedValue = UserFeatureRestrictions(255)
-	actualValue = ParseUserFeatureRestrictions("1,2,3,4,5,6,7,8,20,21,22")
+	actualValue = ParseUserFeatureRestrictions("1,2,3,4,5,6,7,8,50,51,52")
 	assert.Equal(t, expectedValue, actualValue)
 
 	expectedValue = UserFeatureRestrictions(255)
-	actualValue = ParseUserFeatureRestrictions("1,2,3,4,5,6,7,8,a,b,20")
+	actualValue = ParseUserFeatureRestrictions("1,2,3,4,5,6,7,8,a,b,50")
 	assert.Equal(t, expectedValue, actualValue)
 }

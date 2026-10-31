@@ -27,6 +27,16 @@ func (r UserFeatureRestrictions) Contains(featureRestrictionType UserFeatureRest
 	return uint64(r)&typeValue == typeValue
 }
 
+// ContainsAll returns whether contains all the specified features
+func (r UserFeatureRestrictions) ContainsAll(featureRestriction UserFeatureRestrictions) bool {
+	return uint64(r)&uint64(featureRestriction) == uint64(featureRestriction)
+}
+
+// ContainsAny returns whether contains any of the specified features
+func (r UserFeatureRestrictions) ContainsAny(featureRestriction UserFeatureRestrictions) bool {
+	return uint64(r)&uint64(featureRestriction) != 0
+}
+
 // String returns a textual representation of all the restrictions of user features
 func (r UserFeatureRestrictions) String() string {
 	builder := strings.Builder{}
@@ -44,6 +54,17 @@ func (r UserFeatureRestrictions) String() string {
 	}
 
 	return builder.String()
+}
+
+// FromUserFeatureRestrictionTypes returns a new feature restrictions with the specified feature restriction types
+func FromUserFeatureRestrictionTypes(restrictionTypes ...UserFeatureRestrictionType) UserFeatureRestrictions {
+	restrictions := UserFeatureRestrictions(0)
+
+	for _, restrictionType := range restrictionTypes {
+		restrictions = restrictions.Add(restrictionType)
+	}
+
+	return restrictions
 }
 
 // ParseUserFeatureRestrictions returns restrictions of user features according to the textual restrictions of user features  separated by commas
@@ -76,29 +97,30 @@ type UserFeatureRestrictionType uint64
 
 // User Feature Restriction Type
 const (
-	USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD                              UserFeatureRestrictionType = 1
-	USER_FEATURE_RESTRICTION_TYPE_UPDATE_EMAIL                                 UserFeatureRestrictionType = 2
-	USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO                    UserFeatureRestrictionType = 3
-	USER_FEATURE_RESTRICTION_TYPE_UPDATE_AVATAR                                UserFeatureRestrictionType = 4
-	USER_FEATURE_RESTRICTION_TYPE_REVOKE_OTHER_SESSION                         UserFeatureRestrictionType = 5
-	USER_FEATURE_RESTRICTION_TYPE_ENABLE_2FA                                   UserFeatureRestrictionType = 6
-	USER_FEATURE_RESTRICTION_TYPE_DISABLE_2FA                                  UserFeatureRestrictionType = 7
-	USER_FEATURE_RESTRICTION_TYPE_FORGET_PASSWORD                              UserFeatureRestrictionType = 8
-	USER_FEATURE_RESTRICTION_TYPE_IMPORT_TRANSACTION                           UserFeatureRestrictionType = 9
-	USER_FEATURE_RESTRICTION_TYPE_EXPORT_TRANSACTION                           UserFeatureRestrictionType = 10
-	USER_FEATURE_RESTRICTION_TYPE_CLEAR_ALL_DATA                               UserFeatureRestrictionType = 11
-	USER_FEATURE_RESTRICTION_TYPE_SYNC_APPLICATION_SETTINGS                    UserFeatureRestrictionType = 12
-	USER_FEATURE_RESTRICTION_TYPE_MCP_ACCESS                                   UserFeatureRestrictionType = 13
-	USER_FEATURE_RESTRICTION_TYPE_CREATE_TRANSACTION_FROM_AI_IMAGE_RECOGNITION UserFeatureRestrictionType = 14
-	USER_FEATURE_RESTRICTION_TYPE_OAUTH2_LOGIN                                 UserFeatureRestrictionType = 15
-	USER_FEATURE_RESTRICTION_TYPE_UNLINK_THIRD_PARTY_LOGIN                     UserFeatureRestrictionType = 16
-	USER_FEATURE_RESTRICTION_TYPE_GENERATE_API_TOKEN                           UserFeatureRestrictionType = 17
-	USER_FEATURE_RESTRICTION_TYPE_CREATE_TRANSACTION_FROM_AI_TEXT_RECOGNITION  UserFeatureRestrictionType = 18
-	USER_FEATURE_RESTRICTION_TYPE_UPLOAD_CUSTOM_ICON                           UserFeatureRestrictionType = 19
+	USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD                                      UserFeatureRestrictionType = 1
+	USER_FEATURE_RESTRICTION_TYPE_UPDATE_EMAIL                                         UserFeatureRestrictionType = 2
+	USER_FEATURE_RESTRICTION_TYPE_UPDATE_PROFILE_BASIC_INFO                            UserFeatureRestrictionType = 3
+	USER_FEATURE_RESTRICTION_TYPE_UPDATE_AVATAR                                        UserFeatureRestrictionType = 4
+	USER_FEATURE_RESTRICTION_TYPE_REVOKE_OTHER_SESSION                                 UserFeatureRestrictionType = 5
+	USER_FEATURE_RESTRICTION_TYPE_ENABLE_2FA                                           UserFeatureRestrictionType = 6
+	USER_FEATURE_RESTRICTION_TYPE_DISABLE_2FA                                          UserFeatureRestrictionType = 7
+	USER_FEATURE_RESTRICTION_TYPE_FORGET_PASSWORD                                      UserFeatureRestrictionType = 8
+	USER_FEATURE_RESTRICTION_TYPE_IMPORT_TRANSACTION                                   UserFeatureRestrictionType = 9
+	USER_FEATURE_RESTRICTION_TYPE_EXPORT_TRANSACTION                                   UserFeatureRestrictionType = 10
+	USER_FEATURE_RESTRICTION_TYPE_CLEAR_ALL_DATA                                       UserFeatureRestrictionType = 11
+	USER_FEATURE_RESTRICTION_TYPE_SYNC_APPLICATION_SETTINGS                            UserFeatureRestrictionType = 12
+	USER_FEATURE_RESTRICTION_TYPE_MCP_ACCESS                                           UserFeatureRestrictionType = 13
+	USER_FEATURE_RESTRICTION_TYPE_CREATE_TRANSACTION_FROM_AI_IMAGE_RECOGNITION         UserFeatureRestrictionType = 14
+	USER_FEATURE_RESTRICTION_TYPE_OAUTH2_LOGIN                                         UserFeatureRestrictionType = 15
+	USER_FEATURE_RESTRICTION_TYPE_UNLINK_THIRD_PARTY_LOGIN                             UserFeatureRestrictionType = 16
+	USER_FEATURE_RESTRICTION_TYPE_GENERATE_API_TOKEN                                   UserFeatureRestrictionType = 17
+	USER_FEATURE_RESTRICTION_TYPE_CREATE_TRANSACTION_FROM_AI_TEXT_RECOGNITION          UserFeatureRestrictionType = 18
+	USER_FEATURE_RESTRICTION_TYPE_UPLOAD_CUSTOM_ICON                                   UserFeatureRestrictionType = 19
+	USER_FEATURE_RESTRICTION_TYPE_GENERATE_CUSTOM_CHART_SCRIPTS_BY_AI_CODING_ASSISTANT UserFeatureRestrictionType = 20
 )
 
 const userFeatureRestrictionTypeMinValue UserFeatureRestrictionType = USER_FEATURE_RESTRICTION_TYPE_UPDATE_PASSWORD
-const userFeatureRestrictionTypeMaxValue UserFeatureRestrictionType = USER_FEATURE_RESTRICTION_TYPE_UPLOAD_CUSTOM_ICON
+const userFeatureRestrictionTypeMaxValue UserFeatureRestrictionType = USER_FEATURE_RESTRICTION_TYPE_GENERATE_CUSTOM_CHART_SCRIPTS_BY_AI_CODING_ASSISTANT
 
 // String returns a textual representation of the restriction type of user features
 func (t UserFeatureRestrictionType) String() string {
@@ -141,6 +163,8 @@ func (t UserFeatureRestrictionType) String() string {
 		return "Create Transaction from AI Text Recognition"
 	case USER_FEATURE_RESTRICTION_TYPE_UPLOAD_CUSTOM_ICON:
 		return "Upload Custom Icon"
+	case USER_FEATURE_RESTRICTION_TYPE_GENERATE_CUSTOM_CHART_SCRIPTS_BY_AI_CODING_ASSISTANT:
+		return "Generate Custom Chart Scripts by AI Coding Assistant"
 	default:
 		return fmt.Sprintf("Invalid(%d)", int(t))
 	}

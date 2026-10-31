@@ -34,17 +34,16 @@
                 <v-text-field eager ref="filterInput" density="compact"
                               :prepend-inner-icon="mdiMagnify"
                               :placeholder="filterPlaceholder"
-                              v-model="filterContent"
-                              @click:control="onInputFocused(filterInput, true)"
-                              @update:focused="onInputFocused(filterInput, $event)"></v-text-field>
+                              v-model="filterContent"></v-text-field>
             </div>
             <div class="text-body-large mx-4 mt-3 mb-2" v-show="!filteredItems || !filteredItems.length">
                 {{ filterNoItemsText }}
             </div>
             <div ref="dropdownMenu" class="two-column-list-container" v-show="filteredItems && filteredItems.length">
                 <div class="primary-list-container">
-                    <v-list :class="{ 'list-item-with-header': !!primaryHeaderField, 'list-item-with-footer': !!primaryFooterField }">
-                        <v-list-item :class="{ 'primary-list-item-selected v-list-item--active text-primary': item === selectedPrimaryItem }"
+                    <v-list ref="primaryList" :class="{ 'list-item-with-header': !!primaryHeaderField, 'list-item-with-footer': !!primaryFooterField }"
+                            @keydown.capture="onListKeydown($event, 'left')">
+                        <v-list-item :class="{ 'primary-list-item-selected v-list-item--active text-primary': item === activePrimaryItem }"
                                      :key="primaryKeyField ? (item as Record<string, unknown>)[primaryKeyField] as string : JSON.stringify(item)"
                                      v-for="item in filteredItems"
                                      @click="onPrimaryItemClicked(item)">
@@ -64,8 +63,9 @@
                     </v-list>
                 </div>
                 <div class="secondary-list-container">
-                    <v-list :class="{ 'list-item-with-header': !!secondaryHeaderField, 'list-item-with-footer': !!secondaryFooterField }"
-                            v-if="selectedPrimaryItem && primarySubItemsField && (selectedPrimaryItem as Record<string, unknown>)[primarySubItemsField]">
+                    <v-list ref="secondaryList" :class="{ 'list-item-with-header': !!secondaryHeaderField, 'list-item-with-footer': !!secondaryFooterField }"
+                            @keydown.capture="onListKeydown($event, 'right')"
+                            v-if="activePrimaryItem && primarySubItemsField && (activePrimaryItem as Record<string, unknown>)[primarySubItemsField]">
                         <v-list-item :class="{ 'secondary-list-item-selected v-list-item--active text-primary': isSecondarySelected(subItem) }"
                                      :key="secondaryKeyField ? subItem[secondaryKeyField] as string : JSON.stringify(subItem)"
                                      v-for="subItem in filteredSubItems"
@@ -92,6 +92,7 @@
 
 <script setup lang="ts">
 import { VSelect } from 'vuetify/components/VSelect';
+import { VList } from 'vuetify/components/VList';
 import { VTextField } from 'vuetify/components/VTextField';
 
 import { ref, computed, useTemplateRef, nextTick } from 'vue';
@@ -106,7 +107,13 @@ import {
 } from '@/lib/common.ts';
 import { scrollToSelectedItem } from '@/lib/ui/common.ts';
 import { getIconType } from '@/lib/icon.ts';
-import { type ComponentDensity, type InputVariant, setChildInputFocus } from '@/lib/ui/desktop.ts';
+import {
+    type ComponentDensity,
+    type InputVariant,
+    type TwoColumnListColumn,
+    setChildInputFocus,
+    setTwoColumnItemFocusWhenKeydown
+} from '@/lib/ui/desktop.ts';
 
 import {
     mdiChevronRight,
@@ -125,6 +132,7 @@ interface DesktopTwoColumnListItemSelectionProps extends CommonTwoColumnListItem
     customSelectionSecondaryText?: string;
     noItemText?: string;
     autoUpdateMenuPosition?: boolean;
+    disableAutoSelectFirstSecondaryItem?: boolean;
 }
 
 const props = defineProps<DesktopTwoColumnListItemSelectionProps>();
@@ -150,10 +158,13 @@ const {
 const twoColumnMainSelect = useTemplateRef<VSelect>('twoColumnMainSelect');
 const filterInput = useTemplateRef<VTextField>('filterInput');
 const dropdownMenu = useTemplateRef<HTMLElement>('dropdownMenu');
+const primaryList = useTemplateRef<VList>('primaryList');
+const secondaryList = useTemplateRef<VList>('secondaryList');
 
 const menuState = ref<boolean>(false);
+const menuPrimaryValue = ref<unknown>(undefined);
 
-const filteredSubItems = computed<Record<string, unknown>[]>(() => getFilteredSubItems(selectedPrimaryItem.value));
+const filteredSubItems = computed<Record<string, unknown>[]>(() => getFilteredSubItems(activePrimaryItem.value));
 
 const currentPrimaryValue = computed<unknown>({
     get: () => {
@@ -163,6 +174,11 @@ const currentPrimaryValue = computed<unknown>({
         const primaryItem = getItemByKeyValue(filteredItems.value, value, props.primaryValueField as string);
 
         if (!primaryItem) {
+            return;
+        }
+
+        if (props.disableAutoSelectFirstSecondaryItem) {
+            menuPrimaryValue.value = value;
             return;
         }
 
@@ -188,6 +204,7 @@ const currentSecondaryValue = computed<unknown>({
 
 const selectedPrimaryItem = computed<unknown>(() => getSelectedPrimaryItem(currentPrimaryValue.value));
 const selectedSecondaryItem = computed<unknown>(() => getSelectedSecondaryItem(currentSecondaryValue.value, selectedPrimaryItem.value));
+const activePrimaryItem = computed<unknown>(() => menuState.value && props.disableAutoSelectFirstSecondaryItem ? getSelectedPrimaryItem(menuPrimaryValue.value) : selectedPrimaryItem.value);
 
 const noSelectionText = computed<string>(() => props.noItemText ? props.noItemText : tt('None'));
 
@@ -246,22 +263,60 @@ function onSecondaryItemClicked(subItem: unknown): void {
     updateCurrentSecondaryValue(currentSecondaryValue, subItem);
 }
 
+function onListKeydown(event: KeyboardEvent, column: TwoColumnListColumn): void {
+    setTwoColumnItemFocusWhenKeydown(event, column, {
+        getList: column => {
+            if (column === 'left') {
+                return primaryList.value?.$el;
+            } else if (column === 'right') {
+                return secondaryList.value?.$el;
+            } else {
+                return null;
+            }
+        },
+        getSelectedIndex: column => {
+            if (column === 'left') {
+                return filteredItems.value.findIndex(item => item === activePrimaryItem.value);
+            } else if (column === 'right') {
+                return filteredSubItems.value.findIndex(isSecondarySelected);
+            } else {
+                return -1;
+            }
+        },
+        onSelect: (column, index) => {
+            if (column === 'left' && filteredItems.value[index]) {
+                onPrimaryItemClicked(filteredItems.value[index]);
+            } else if (column === 'right' && filteredSubItems.value[index]) {
+                if (props.secondaryValueField) {
+                    emit('update:modelValue', filteredSubItems.value[index][props.secondaryValueField]);
+                }
+            }
+        },
+        onLeave: () => {
+            menuState.value = false;
+            twoColumnMainSelect.value?.focus();
+        }
+    });
+}
+
 function onMenuStateChanged(state: boolean): void {
     if (state) {
+        menuPrimaryValue.value = getCurrentPrimaryValueBySecondaryValue(props.modelValue);
+
         nextTick(() => {
             if (dropdownMenu.value && dropdownMenu.value.parentElement) {
                 scrollToSelectedItem(dropdownMenu.value.parentElement, '.primary-list-container', '.primary-list-container', '.primary-list-item-selected');
                 scrollToSelectedItem(dropdownMenu.value.parentElement, '.secondary-list-container', '.secondary-list-container', '.secondary-list-item-selected');
             }
-        });
-    }
-}
 
-function onInputFocused(input: VTextField | null | undefined, focused: boolean): void {
-    if (input && focused) {
-        nextTick(() => {
-            setChildInputFocus(input?.$el, 'input');
-            updateMenuPosition();
+            if (props.enableFilter) {
+                // the menu content is created when the menu opens for the first time, so the filter field may not exist yet on this tick
+                setTimeout(() => {
+                    if (menuState.value && filterInput.value) {
+                        setChildInputFocus(filterInput.value.$el, 'input');
+                    }
+                }, 50);
+            }
         });
     }
 }

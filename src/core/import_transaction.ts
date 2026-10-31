@@ -4,6 +4,88 @@ import { type DateFormatOrder, KnownDateTimeFormat } from './datetime.ts';
 import { KnownDateTimezoneFormat } from './timezone.ts';
 import { TransactionType } from './transaction.ts';
 
+export interface ImportFileTypeAndExtensions {
+    readonly type: string;
+    readonly extensions?: string;
+}
+
+export interface ImportFileCategoryAndTypes {
+    readonly categoryName: string;
+    readonly fileTypes: ImportFileType[];
+}
+
+export interface ImportFileTypeSupportedAdditionalOptions extends Record<string, boolean | undefined> {
+    readonly payeeAsTag?: boolean;
+    readonly payeeAsDescription?: boolean;
+    readonly memberAsTag?: boolean;
+    readonly projectAsTag?: boolean;
+    readonly merchantAsTag?: boolean;
+}
+
+export interface ImportFileType extends ImportFileTypeAndExtensions {
+    readonly type: string;
+    readonly name: string;
+    readonly extensions: string;
+    readonly subTypes?: ImportFileTypeSubType[];
+    readonly supportedEncodings?: string[];
+    readonly dataFromTextbox?: boolean;
+    readonly needAITextRecognition?: boolean;
+    readonly needAIImageRecognition?: boolean;
+    readonly supportedAdditionalOptions?: ImportFileTypeSupportedAdditionalOptions;
+    readonly supportedAIAdditionalPrompt?: boolean;
+    readonly document?: {
+        readonly supportMultiLanguages: boolean | string;
+        readonly anchor: string;
+    };
+}
+
+export interface ImportFileTypeSubType extends ImportFileTypeAndExtensions {
+    readonly type: string;
+    readonly name: string;
+    readonly extensions?: string;
+}
+
+export enum ImportCustomFileFormatProcessMethod {
+    ColumnMapping,
+    CustomScript
+}
+
+export interface LocalizedImportFileCategoryAndTypes {
+    readonly displayCategoryName: string;
+    readonly fileTypes: LocalizedImportFileType[];
+}
+
+export interface LocalizedImportFileType extends ImportFileTypeAndExtensions {
+    readonly type: string;
+    readonly displayName: string;
+    readonly extensions: string;
+    readonly subTypes?: LocalizedImportFileTypeSubType[];
+    readonly supportedEncodings?: LocalizedImportFileTypeSupportedEncodings[];
+    readonly dataFromTextbox?: boolean;
+    readonly needAITextRecognition?: boolean;
+    readonly needAIImageRecognition?: boolean;
+    readonly supportedAdditionalOptions?: ImportFileTypeSupportedAdditionalOptions;
+    readonly supportedAIAdditionalPrompt?: boolean;
+    readonly document?: LocalizedImportFileDocument;
+}
+
+export interface LocalizedImportFileTypeSubType extends ImportFileTypeAndExtensions {
+    readonly type: string;
+    readonly displayName: string;
+    readonly extensions?: string;
+}
+
+export interface LocalizedImportFileTypeSupportedEncodings {
+    readonly encoding: string;
+    readonly displayName: string;
+}
+
+export interface LocalizedImportFileDocument {
+    readonly language: string;
+    readonly displayLanguageName: string;
+    readonly anchor: string;
+}
+
 export class ImportTransactionColumnType implements TypeAndName {
     private static readonly allInstances: ImportTransactionColumnType[] = [];
 
@@ -46,6 +128,7 @@ export class ImportTransactionDataMapping {
     private static readonly DEFAULT_GEO_LOCATION_SEPARATOR = ' ';
     private static readonly DEFAULT_GEO_LOCATION_ORDER = 'lonlat';
     private static readonly DEFAULT_TAG_SEPARATOR = ';';
+    private static readonly DEFAULT_TAG_SEPARATOR_FOR_SSV = ',';
 
     public includeHeader: boolean;
     public dataColumnMapping: Record<number, number>;
@@ -276,7 +359,7 @@ export class ImportTransactionDataMapping {
         return detectedFormats[0]!.type;
     }
 
-    public reset(): void {
+    public reset(columnSeparator?: string): void {
         this.includeHeader = ImportTransactionDataMapping.DEFAULT_INCLUDE_HEADER;
         this.dataColumnMapping = {};
         this.transactionTypeMapping = {};
@@ -285,7 +368,7 @@ export class ImportTransactionDataMapping {
         this.amountFormat = ImportTransactionDataMapping.DEFAULT_AMOUNT_FORMAT;
         this.geoLocationSeparator = ImportTransactionDataMapping.DEFAULT_GEO_LOCATION_SEPARATOR;
         this.geoLocationOrder = ImportTransactionDataMapping.DEFAULT_GEO_LOCATION_ORDER;
-        this.tagSeparator = ImportTransactionDataMapping.DEFAULT_TAG_SEPARATOR;
+        this.tagSeparator = ImportTransactionDataMapping.getDefaultTagSeparator(columnSeparator);
     }
 
     public toJson(): string {
@@ -304,7 +387,7 @@ export class ImportTransactionDataMapping {
         });
     }
 
-    public static createEmpty(): ImportTransactionDataMapping {
+    public static createEmpty(columnSeparator?: string): ImportTransactionDataMapping {
         return new ImportTransactionDataMapping(
             ImportTransactionDataMapping.DEFAULT_INCLUDE_HEADER,
             {},
@@ -314,7 +397,7 @@ export class ImportTransactionDataMapping {
             ImportTransactionDataMapping.DEFAULT_AMOUNT_FORMAT,
             ImportTransactionDataMapping.DEFAULT_GEO_LOCATION_SEPARATOR,
             ImportTransactionDataMapping.DEFAULT_GEO_LOCATION_ORDER,
-            ImportTransactionDataMapping.DEFAULT_TAG_SEPARATOR
+            ImportTransactionDataMapping.getDefaultTagSeparator(columnSeparator)
         );
     }
 
@@ -340,6 +423,14 @@ export class ImportTransactionDataMapping {
             );
         } catch {
             return null;
+        }
+    }
+
+    private static getDefaultTagSeparator(columnSeparator?: string): string {
+        if (columnSeparator === ';') {
+            return ImportTransactionDataMapping.DEFAULT_TAG_SEPARATOR_FOR_SSV;
+        } else {
+            return ImportTransactionDataMapping.DEFAULT_TAG_SEPARATOR;
         }
     }
 }

@@ -58,4 +58,6 @@ var (
 	ErrCannotDeleteTransactionWithRefunds                          = NewNormalError(NormalSubcategoryTransaction, 51, http.StatusBadRequest, "cannot delete the transaction which has refunds, please delete the refunds first")
 	ErrCannotModifyTransactionTypeWithRefunds                      = NewNormalError(NormalSubcategoryTransaction, 52, http.StatusBadRequest, "cannot modify the type of the transaction which has refunds")
 	ErrCannotModifyTransactionAmountBelowRefundedAmount            = NewNormalError(NormalSubcategoryTransaction, 53, http.StatusBadRequest, "cannot modify the transaction amount to be less than the refunded amount")
+	ErrTransactionBatchCreateNoTransactions                        = NewNormalError(NormalSubcategoryTransaction, 54, http.StatusBadRequest, "no transactions")
+	ErrTransactionBatchCreateTooManyTransactions                   = NewNormalError(NormalSubcategoryTransaction, 55, http.StatusBadRequest, "too many transactions")
 )

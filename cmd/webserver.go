@@ -188,7 +188,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.AvatarProvider == core.USER_AVATAR_PROVIDER_INTERNAL {
 		avatarRoute := router.Group("/avatar")
-		avatarRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+		avatarRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config), config))
 		{
 			avatarRoute.GET("/:fileName", bindImage(api.Users.UserGetAvatarHandler, config))
 		}
@@ -196,7 +196,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.EnableTransactionPictures {
 		pictureRoute := router.Group("/pictures")
-		pictureRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+		pictureRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config), config))
 		{
 			pictureRoute.GET("/:fileName", bindImage(api.TransactionPictures.TransactionPictureGetHandler, config))
 		}
@@ -204,7 +204,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.EnableUserCustomIcon {
 		customIconRoute := router.Group("/icons")
-		customIconRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+		customIconRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config), config))
 		{
 			customIconRoute.GET("/:fileName", bindImage(api.UserCustomIcons.CustomIconGetHandler, config))
 		}
@@ -214,7 +214,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.MapProvider == settings.AmapProvider && config.AmapSecurityVerificationMethod == settings.AmapSecurityVerificationInternalProxyMethod {
 		amapApiProxyRoute := router.Group("/_AMapService")
-		amapApiProxyRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByCookie(config), config))
+		amapApiProxyRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByCookie(config), config))
 		{
 			amapApiProxyRoute.GET("/*action", bindProxy(api.AmapApis.AmapApiProxyHandler, config))
 		}
@@ -232,7 +232,7 @@ func startWebServer(c *core.CliContext) error {
 		mcpRoute.Use(bindMiddleware(middlewares.RequestId(config), config))
 		mcpRoute.Use(bindMiddleware(middlewares.RequestLog, config))
 		mcpRoute.Use(bindMiddleware(middlewares.MCPServerIpLimit(config), config))
-		mcpRoute.Use(bindMiddleware(middlewares.JWTMCPAuthorization(config), config))
+		mcpRoute.Use(bindMiddleware(middlewares.TokenMCPAuthorization(config), config))
 		{
 			mcpRoute.POST("", bindJSONRPCApi(map[string]core.JSONRPCApiHandlerFunc{
 				"initialize":     api.ModelContextProtocols.InitializeHandler,
@@ -269,7 +269,7 @@ func startWebServer(c *core.CliContext) error {
 
 		if config.EnableInternalAuth && config.EnableTwoFactor {
 			twoFactorRoute := apiRoute.Group("/2fa")
-			twoFactorRoute.Use(bindMiddleware(middlewares.JWTTwoFactorAuthorization(config), config))
+			twoFactorRoute.Use(bindMiddleware(middlewares.TokenTwoFactorAuthorization(config), config))
 			{
 				twoFactorRoute.POST("/authorize.json", bindApiWithTokenUpdate(api.Authorizations.TwoFactorAuthorizeHandler, config))
 				twoFactorRoute.POST("/recovery.json", bindApiWithTokenUpdate(api.Authorizations.TwoFactorAuthorizeByRecoveryCodeHandler, config))
@@ -278,7 +278,7 @@ func startWebServer(c *core.CliContext) error {
 
 		if config.EnableOAuth2Login {
 			oauth2Route := apiRoute.Group("/oauth2")
-			oauth2Route.Use(bindMiddleware(middlewares.JWTOAuth2CallbackAuthorization(config), config))
+			oauth2Route.Use(bindMiddleware(middlewares.TokenOAuth2CallbackAuthorization(config), config))
 			{
 				oauth2Route.POST("/authorize.json", bindApiWithTokenUpdate(api.Authorizations.OAuth2CallbackAuthorizeHandler, config))
 			}
@@ -292,7 +292,7 @@ func startWebServer(c *core.CliContext) error {
 			apiRoute.POST("/verify_email/resend.json", bindApi(api.Users.UserSendVerifyEmailByUnloginUserHandler, config))
 
 			emailVerifyRoute := apiRoute.Group("/verify_email")
-			emailVerifyRoute.Use(bindMiddleware(middlewares.JWTEmailVerifyAuthorization(config), config))
+			emailVerifyRoute.Use(bindMiddleware(middlewares.TokenEmailVerifyAuthorization(config), config))
 			{
 				emailVerifyRoute.POST("/by_token.json", bindApi(api.Users.UserEmailVerifyHandler, config))
 			}
@@ -302,7 +302,7 @@ func startWebServer(c *core.CliContext) error {
 			apiRoute.POST("/forget_password/request.json", bindApi(api.ForgetPasswords.UserForgetPasswordRequestHandler, config))
 
 			resetPasswordRoute := apiRoute.Group("/forget_password/reset")
-			resetPasswordRoute.Use(bindMiddleware(middlewares.JWTResetPasswordAuthorization(config), config))
+			resetPasswordRoute.Use(bindMiddleware(middlewares.TokenResetPasswordAuthorization(config), config))
 			{
 				resetPasswordRoute.POST("/by_token.json", bindApi(api.ForgetPasswords.UserResetPasswordHandler, config))
 			}
@@ -311,7 +311,7 @@ func startWebServer(c *core.CliContext) error {
 		apiRoute.GET("/logout.json", bindApiWithTokenUpdate(api.Tokens.TokenRevokeCurrentHandler, config))
 
 		apiV1Route := apiRoute.Group("/v1")
-		apiV1Route.Use(bindMiddleware(middlewares.JWTAuthorizationByHeader(config), config))
+		apiV1Route.Use(bindMiddleware(middlewares.TokenAuthorizationByHeader(config), config))
 		apiV1Route.Use(bindMiddleware(middlewares.APITokenIpLimit(config), config))
 		{
 			// Tokens
@@ -383,6 +383,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.GET("/transactions/list/by_month.json", bindApi(api.Transactions.TransactionMonthListHandler, config))
 			apiV1Route.GET("/transactions/list/all.json", bindApi(api.Transactions.TransactionListAllHandler, config))
 			apiV1Route.GET("/transactions/reconciliation_statements.json", bindApi(api.Transactions.TransactionReconciliationStatementHandler, config))
+			apiV1Route.GET("/transactions/unreconciled_transaction_counts.json", bindApi(api.Transactions.TransactionUnreconciledTransactionCountsHandler, config))
 			apiV1Route.GET("/transactions/statistics.json", bindApi(api.Transactions.TransactionStatisticsHandler, config))
 			apiV1Route.GET("/transactions/statistics/trends.json", bindApi(api.Transactions.TransactionStatisticsTrendsHandler, config))
 			apiV1Route.GET("/transactions/statistics/asset_trends.json", bindApi(api.Transactions.TransactionStatisticsAssetTrendsHandler, config))
@@ -390,6 +391,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.GET("/transactions/amounts/daily.json", bindApi(api.Transactions.TransactionDailyAmountsHandler, config))
 			apiV1Route.GET("/transactions/get.json", bindApi(api.Transactions.TransactionGetHandler, config))
 			apiV1Route.POST("/transactions/add.json", bindApi(api.Transactions.TransactionCreateHandler, config))
+			apiV1Route.POST("/transactions/add_batch.json", bindApi(api.Transactions.TransactionCreateBatchHandler, config))
 			apiV1Route.POST("/transactions/modify.json", bindApi(api.Transactions.TransactionModifyHandler, config))
 			apiV1Route.POST("/transactions/batch_update/category.json", bindApi(api.Transactions.TransactionBatchUpdateCategoriesHandler, config))
 			apiV1Route.POST("/transactions/batch_update/account.json", bindApi(api.Transactions.TransactionBatchUpdateAccountsHandler, config))
@@ -472,6 +474,12 @@ func startWebServer(c *core.CliContext) error {
 				}
 			}
 
+			if config.CodingAssistantLLMConfig != nil && config.CodingAssistantLLMConfig.LLMProvider != "" {
+				if config.InsightsExplorerCodingAssistant {
+					apiV1Route.POST("/llm/code/generate.json", bindApi(api.LargeLanguageModels.GenerateCodeHandler, config))
+				}
+			}
+
 			// User Custom Icons
 			if config.EnableUserCustomIcon {
 				apiV1Route.GET("/custom_icons/list.json", bindApi(api.UserCustomIcons.CustomIconListHandler, config))
@@ -479,6 +487,14 @@ func startWebServer(c *core.CliContext) error {
 				apiV1Route.POST("/custom_icons/move.json", bindApi(api.UserCustomIcons.CustomIconMoveHandler, config))
 				apiV1Route.POST("/custom_icons/delete.json", bindApi(api.UserCustomIcons.CustomIconDeleteHandler, config))
 			}
+
+			// Import Presets
+			apiV1Route.GET("/import_presets/list.json", bindApi(api.ImportPresets.ImportPresetListHandler, config))
+			apiV1Route.GET("/import_presets/get.json", bindApi(api.ImportPresets.ImportPresetGetHandler, config))
+			apiV1Route.POST("/import_presets/add.json", bindApi(api.ImportPresets.ImportPresetCreateHandler, config))
+			apiV1Route.POST("/import_presets/modify.json", bindApi(api.ImportPresets.ImportPresetModifyHandler, config))
+			apiV1Route.POST("/import_presets/move.json", bindApi(api.ImportPresets.ImportPresetMoveHandler, config))
+			apiV1Route.POST("/import_presets/delete.json", bindApi(api.ImportPresets.ImportPresetDeleteHandler, config))
 
 			// Exchange Rates
 			apiV1Route.GET("/exchange_rates/latest.json", bindApi(api.ExchangeRates.LatestExchangeRateHandler, config))

@@ -173,7 +173,7 @@
                     <span v-if="item.type === TransactionType.Transfer && item.sourceAccountId !== item.destinationAccountId">{{ getTransactionDisplayDestinationAmount(item) }}</span>
                     <v-tooltip activator="parent" v-if="(item.type !== TransactionType.Transfer && getTransactionSourceAccountCurrency(item) !== defaultCurrency) || (item.type === TransactionType.Transfer && getTransactionSourceAccountCurrency(item) !== defaultCurrency && getTransactionDestinationAccountCurrency(item) !== defaultCurrency)">
                         <span>{{ getTransactionDisplaySourceAmountInDefaultCurrency(item) }}</span>
-                        <v-icon class="ms-1" size="13" :icon="mdiArrowRight" v-if="item.type === TransactionType.Transfer && item.sourceAccountId !== item.destinationAccountId && getTransactionSourceAccountCurrency(item) !== getTransactionDestinationAccountCurrency(item) && item.sourceAmount !== item.destinationAmount"></v-icon>
+                        <v-icon class="icon-with-direction mx-1" size="13" :icon="mdiArrowRight" v-if="item.type === TransactionType.Transfer && item.sourceAccountId !== item.destinationAccountId && getTransactionSourceAccountCurrency(item) !== getTransactionDestinationAccountCurrency(item) && item.sourceAmount !== item.destinationAmount"></v-icon>
                         <span v-if="item.type === TransactionType.Transfer && item.sourceAccountId !== item.destinationAccountId && getTransactionSourceAccountCurrency(item) !== getTransactionDestinationAccountCurrency(item) && item.sourceAmount !== item.destinationAmount">{{ getTransactionDisplayDestinationAmountInDefaultCurrency(item) }}</span>
                     </v-tooltip>
                 </div>
@@ -248,7 +248,7 @@
                 </div>
             </template>
             <template #item.geoLocation="{ item }">
-                <span v-if="item.geoLocation">{{ `(${formatCoordinate(item.geoLocation, coordinateDisplayType)})` }}</span>
+                <span v-if="item.geoLocation">{{ `(${formatCoordinate(item.geoLocation)})` }}</span>
                 <span v-else-if="!item.geoLocation">{{ tt('None') }}</span>
             </template>
             <template #item.tagIds="{ item }">
@@ -440,7 +440,7 @@ import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { useExchangeRatesStore } from '@/stores/exchangeRates.ts';
 
 import { type NameValue, type NameNumeralValue, itemAndIndex, reversed, keys } from '@/core/base.ts';
-import { AmountFilterType } from '@/core/numeral.ts';
+import { DecimalSeparator, AmountFilterType } from '@/core/numeral.ts';
 import { CategoryType } from '@/core/category.ts';
 import { TransactionType } from '@/core/transaction.ts';
 import { KnownFileType } from '@/core/file.ts';
@@ -453,6 +453,7 @@ import { Account, type CategorizedAccountWithDisplayBalance } from '@/models/acc
 import type { TransactionCategory } from '@/models/transaction_category.ts';
 import { TransactionTag } from '@/models/transaction_tag.ts';
 import { ImportTransaction } from '@/models/imported_transaction.ts';
+import type { ImportTransactionReplaceRule } from '@/models/rule.ts';
 
 import {
     isString,
@@ -467,7 +468,6 @@ import {
     parseDateTimeFromUnixTime,
     parseDateTimeFromUnixTimeWithTimezoneOffset
 } from '@/lib/datetime.ts';
-import { formatCoordinate } from '@/lib/coordinate.ts';
 import { getCategoryIconType } from '@/lib/icon.ts';
 import { getAccountMapByName } from '@/lib/account.ts';
 import {
@@ -537,13 +537,16 @@ const props = defineProps<{
 const {
     tt,
     formatRange,
+    getCurrentDecimalSeparator,
     formatDateTimeToLongDateTime,
     formatDateTimeToGregorianDefaultDateTime,
     formatAmountToWesternArabicNumeralsWithoutDigitGrouping,
     formatAmountToLocalizedNumeralsWithCurrency,
     formatNumberToLocalizedNumerals,
+    formatNumberToWesternArabicNumeralsWithoutDigitGrouping,
     getCategorizedAccountsWithDisplayBalance,
-    getTablePageOptions
+    getTablePageOptions,
+    formatCoordinate
 } = useI18n();
 
 const { allTagsWithGroupHeader } = useTransactionTagSelectionBase({ modelValue: [] }, false);
@@ -586,8 +589,8 @@ const currentDescriptionFilterValue = ref<string | null>(null);
 const showAccountBalance = computed<boolean>(() => settingsStore.appSettings.showAccountBalance);
 const customAccountCategoryOrder = computed<string>(() => settingsStore.appSettings.accountCategoryOrders);
 
+const useCommaDecimalSeparator = computed<boolean>(() => getCurrentDecimalSeparator() === DecimalSeparator.Comma.symbol);
 const defaultCurrency = computed<string>(() => userStore.currentUserDefaultCurrency);
-const coordinateDisplayType = computed<number>(() => userStore.currentUserCoordinateDisplayType);
 
 const allAccounts = computed<Account[]>(() => accountsStore.allPlainAccounts);
 const allVisibleAccounts = computed<Account[]>(() => accountsStore.allVisiblePlainAccounts);
@@ -944,20 +947,20 @@ const toolMenus = computed<ImportTransactionCheckDataMenu[]>(() => [
     },
     {
         prependIcon: mdiComma,
-        title: tt('Export to CSV (Comma-separated values) File'),
-        disabled: isEditing.value || selectedImportTransactionCount.value < 1,
+        title: tt('Save as CSV (Comma-separated values) File'),
+        disabled: isEditing.value || selectedImportTransactionCount.value < 1 || useCommaDecimalSeparator.value,
         divider: true,
         onClick: () => exportData(KnownFileType.CSV)
     },
     {
         prependIcon: mdiKeyboardTab,
-        title: tt('Export to TSV (Tab-separated values) File'),
+        title: tt('Save as TSV (Tab-separated values) File'),
         disabled: isEditing.value || selectedImportTransactionCount.value < 1,
         onClick: () => exportData(KnownFileType.TSV)
     },
     {
         prependIcon: extendMdiSemicolon,
-        title: tt('Export to SSV (Semicolon-separated values) File'),
+        title: tt('Save as SSV (Semicolon-separated values) File'),
         disabled: isEditing.value || selectedImportTransactionCount.value < 1,
         onClick: () => exportData(KnownFileType.SSV)
     }
@@ -1999,7 +2002,7 @@ function showReplaceInvalidItemDialog(type: BatchReplaceDialogDataType, invalidI
     });
 }
 
-function showBatchApplyRulesDialog(): void {
+function showBatchApplyRulesDialog(initialRules: ImportTransactionReplaceRule[]): void {
     if (isEditing.value) {
         return;
     }
@@ -2011,6 +2014,7 @@ function showBatchApplyRulesDialog(): void {
         sourceAccountNames: allOriginalSourceAccountNames.value,
         destinationAccountNames: allOriginalDestinationAccountNames.value,
         tagNames: allOriginalTransactionTagNames.value,
+        initialRules: initialRules,
         selectedTransactionCount: selectedImportTransactionCount.value
     }).then(result => {
         if (!result || !result.rules || !result.scope) {
@@ -2104,6 +2108,21 @@ function showBatchCreateInvalidItemDialog(type: BatchCreateDialogDataType, inval
     });
 }
 
+function applyPresetRules(rules: ImportTransactionReplaceRule[]): void {
+    if (!rules.length) {
+        return;
+    }
+
+    applyImportTransactionReplaceRules(props.importTransactions || [], rules, 'all', {
+        allCategoriesMap: allCategoriesMap.value,
+        allSecondaryCategoriesMapByName: allSecondaryCategoriesMapByName.value,
+        allAccountsMap: allAccountsMap.value,
+        allAccountsMapByName: allAccountsMapByName.value,
+        allTagsMap: allTagsMap.value,
+        updateTransaction: updateTransactionData
+    });
+}
+
 function changeCustomDateFilter(minTime: number, maxTime: number): void {
     filters.value.minDatetime = minTime;
     filters.value.maxDatetime = maxTime;
@@ -2148,7 +2167,7 @@ function exportData(fileType: KnownFileType): void {
         const accountName = transaction.sourceAccountId && transaction.sourceAccountId !== '0' && allAccountsMap.value[transaction.sourceAccountId] ? (allAccountsMap.value[transaction.sourceAccountId]?.name ?? transaction.originalSourceAccountName) : transaction.originalSourceAccountName;
         const amountCurrency = transaction.sourceAccountId && transaction.sourceAccountId !== '0' && allAccountsMap.value[transaction.sourceAccountId] ? (allAccountsMap.value[transaction.sourceAccountId]?.currency ?? transaction.originalSourceAccountCurrency) : transaction.originalSourceAccountCurrency;
         const amount = formatAmountToWesternArabicNumeralsWithoutDigitGrouping(parseBigDecimal(transaction.sourceAmount), amountCurrency);
-        const geographicLocation = transaction.geoLocation ? `${transaction.geoLocation.longitude} ${transaction.geoLocation.latitude}` : '';
+        const geographicLocation = transaction.geoLocation ? `${formatNumberToWesternArabicNumeralsWithoutDigitGrouping(transaction.geoLocation.longitude)} ${formatNumberToWesternArabicNumeralsWithoutDigitGrouping(transaction.geoLocation.latitude)}` : '';
         let categoryName = transaction.categoryId && transaction.categoryId !== '0' && allCategoriesMap.value[transaction.categoryId] ? (allCategoriesMap.value[transaction.categoryId]?.name ?? transaction.originalCategoryName) : transaction.originalCategoryName;
         let relatedAccountName: string | undefined = undefined;
         let relatedAccountCurrency: string | undefined = undefined;
@@ -2246,6 +2265,7 @@ defineExpose({
     canImport,
     showBatchApplyRulesDialog,
     updateAllTransactionsIsValid,
+    applyPresetRules,
     reset,
     setCountPerPage
 });

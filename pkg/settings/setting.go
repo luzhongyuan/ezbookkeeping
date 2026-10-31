@@ -151,6 +151,7 @@ const (
 // Exchange rates data source types
 const (
 	CentralBankOfArgentinaDataSource   string = "central_bank_of_argentina"
+	NationalBankOfBelarusDataSource    string = "national_bank_of_belarus"
 	BankOfCanadaDataSource             string = "bank_of_canada"
 	CzechNationalBankDataSource        string = "czech_national_bank"
 	DanmarksNationalbankDataSource     string = "danmarks_national_bank"
@@ -158,7 +159,9 @@ const (
 	NationalBankOfGeorgiaDataSource    string = "national_bank_of_georgia"
 	CentralBankOfHungaryDataSource     string = "central_bank_of_hungary"
 	BankOfIsraelDataSource             string = "bank_of_israel"
+	BankOfItalyDataSource              string = "bank_of_italy"
 	NationalBankOfKazakhstanDataSource string = "national_bank_of_kazakhstan"
+	CentralBankOfMalaysiaDataSource    string = "central_bank_of_malaysia"
 	CentralBankOfMyanmarDataSource     string = "central_bank_of_myanmar"
 	NorgesBankDataSource               string = "norges_bank"
 	NationalBankOfPolandDataSource     string = "national_bank_of_poland"
@@ -382,6 +385,7 @@ type Config struct {
 	// Large Language Model
 	TransactionFromAITextRecognition  bool
 	TransactionFromAIImageRecognition bool
+	InsightsExplorerCodingAssistant   bool
 	MaxAIRecognitionPictureFileSize   uint32
 
 	// Large Language Model for Transaction Text Recognition
@@ -389,6 +393,9 @@ type Config struct {
 
 	// Large Language Model for Receipt Image Recognition
 	ReceiptImageRecognitionLLMConfig *LLMConfig
+
+	// Large Language Model for coding assistant
+	CodingAssistantLLMConfig *LLMConfig
 
 	// Uuid
 	UuidGeneratorType string
@@ -491,6 +498,9 @@ type Config struct {
 	ExchangeRatesRequestTimeoutExceedDefaultValue bool
 	ExchangeRatesProxy                            string
 	ExchangeRatesSkipTLSVerify                    bool
+
+	// Developer Tools
+	EnableLanguagePreview bool
 }
 
 // LoadConfiguration loads setting config from given config file path
@@ -554,7 +564,7 @@ func LoadConfiguration(configFilePath string) (*Config, error) {
 		return nil, err
 	}
 
-	err = loadLLMGlobalConfiguration(config, cfgFile, "llm")
+	err = loadAIConfiguration(config, cfgFile, "ai")
 
 	if err != nil {
 		return nil, err
@@ -567,6 +577,12 @@ func LoadConfiguration(configFilePath string) (*Config, error) {
 	}
 
 	config.ReceiptImageRecognitionLLMConfig, err = loadLLMConfiguration(cfgFile, "llm_image_recognition")
+
+	if err != nil {
+		return nil, err
+	}
+
+	config.CodingAssistantLLMConfig, err = loadLLMConfiguration(cfgFile, "llm_coding_assistant")
 
 	if err != nil {
 		return nil, err
@@ -633,6 +649,12 @@ func LoadConfiguration(configFilePath string) (*Config, error) {
 	}
 
 	err = loadExchangeRatesConfiguration(config, cfgFile, "exchange_rates")
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = loadDeveloperTools(config, cfgFile, "developer")
 
 	if err != nil {
 		return nil, err
@@ -909,9 +931,10 @@ func loadStorageConfiguration(config *Config, configFile *ini.File, sectionName 
 	return nil
 }
 
-func loadLLMGlobalConfiguration(config *Config, configFile *ini.File, sectionName string) error {
+func loadAIConfiguration(config *Config, configFile *ini.File, sectionName string) error {
 	config.TransactionFromAITextRecognition = getConfigItemBoolValue(configFile, sectionName, "transaction_from_ai_text_recognition", false)
 	config.TransactionFromAIImageRecognition = getConfigItemBoolValue(configFile, sectionName, "transaction_from_ai_image_recognition", false)
+	config.InsightsExplorerCodingAssistant = getConfigItemBoolValue(configFile, sectionName, "insights_explorer_coding_assistant", false)
 	config.MaxAIRecognitionPictureFileSize = getConfigItemUint32Value(configFile, sectionName, "max_ai_recognition_picture_size", defaultAIRecognitionPictureMaxSize)
 
 	return nil
@@ -1272,6 +1295,7 @@ func loadExchangeRatesConfiguration(config *Config, configFile *ini.File, sectio
 	dataSource := getConfigItemStringValue(configFile, sectionName, "data_source")
 
 	if dataSource == CentralBankOfArgentinaDataSource ||
+		dataSource == NationalBankOfBelarusDataSource ||
 		dataSource == BankOfCanadaDataSource ||
 		dataSource == CzechNationalBankDataSource ||
 		dataSource == DanmarksNationalbankDataSource ||
@@ -1279,7 +1303,9 @@ func loadExchangeRatesConfiguration(config *Config, configFile *ini.File, sectio
 		dataSource == NationalBankOfGeorgiaDataSource ||
 		dataSource == CentralBankOfHungaryDataSource ||
 		dataSource == BankOfIsraelDataSource ||
+		dataSource == BankOfItalyDataSource ||
 		dataSource == NationalBankOfKazakhstanDataSource ||
+		dataSource == CentralBankOfMalaysiaDataSource ||
 		dataSource == CentralBankOfMyanmarDataSource ||
 		dataSource == NorgesBankDataSource ||
 		dataSource == NationalBankOfPolandDataSource ||
@@ -1302,6 +1328,12 @@ func loadExchangeRatesConfiguration(config *Config, configFile *ini.File, sectio
 	}
 
 	config.ExchangeRatesSkipTLSVerify = getConfigItemBoolValue(configFile, sectionName, "skip_tls_verify", false)
+
+	return nil
+}
+
+func loadDeveloperTools(config *Config, configFile *ini.File, sectionName string) error {
+	config.EnableLanguagePreview = getConfigItemBoolValue(configFile, sectionName, "enable_language_preview", false)
 
 	return nil
 }
