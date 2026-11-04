@@ -1077,7 +1077,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 			return errs.ErrTransferTransactionAmountCannotBeLessThanZero
 		}
 
-		err = s.verifyTransferFee(sess, transaction, sourceAccount, destinationAccount)
+		err = s.verifyTransferFee(sess, transaction, sourceAccount, destinationAccount, transaction.FeeCategoryId != oldTransaction.FeeCategoryId)
 
 		if err != nil {
 			return err
@@ -2601,7 +2601,8 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 				}
 
 				feeTotalAmounts.Amount.Add(feeTotalAmounts.Amount, big.NewInt(feeAmount))
-				// the transfer amount does not include the fee, so that the fee is not counted twice
+				// report the transfer as the received amount and the fee as a separate expense item,
+				// so the total outflows (transfer + fee) still equal the full source amount
 				transactionAmount = transaction.RelatedAccountAmount
 			}
 		}
@@ -2793,7 +2794,8 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 				}
 
 				feeTransactionAmounts.Amount.Add(feeTransactionAmounts.Amount, big.NewInt(feeAmount))
-				// the transfer amount does not include the fee, so that the fee is not counted twice
+				// report the transfer as the received amount and the fee as a separate expense item,
+				// so the total outflows (transfer + fee) still equal the full source amount
 				transactionAmount = transaction.RelatedAccountAmount
 			}
 		}
@@ -2881,7 +2883,7 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 		return errs.ErrTransferTransactionAmountCannotBeLessThanZero
 	}
 
-	err = s.verifyTransferFee(sess, transaction, sourceAccount, destinationAccount)
+	err = s.verifyTransferFee(sess, transaction, sourceAccount, destinationAccount, true)
 
 	if err != nil {
 		return err
@@ -3904,7 +3906,7 @@ func (s *TransactionService) isCategoryValid(sess *xorm.Session, transaction *mo
 	return nil
 }
 
-func (s *TransactionService) verifyTransferFee(sess *xorm.Session, transaction *models.Transaction, sourceAccount *models.Account, destinationAccount *models.Account) error {
+func (s *TransactionService) verifyTransferFee(sess *xorm.Session, transaction *models.Transaction, sourceAccount *models.Account, destinationAccount *models.Account, validateFeeCategory bool) error {
 	if transaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT && transaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 		transaction.FeeCategoryId = 0
 		return nil
@@ -3925,8 +3927,16 @@ func (s *TransactionService) verifyTransferFee(sess *xorm.Session, transaction *
 		return errs.ErrTransactionDestinationAmountGreaterThanSourceAmount
 	}
 
-	if transaction.RelatedAccountAmount == transaction.Amount || transaction.FeeCategoryId == 0 {
+	if transaction.RelatedAccountAmount == transaction.Amount {
 		transaction.FeeCategoryId = 0
+		return nil
+	}
+
+	if transaction.FeeCategoryId <= 0 {
+		return errs.ErrTransferFeeCategoryRequired
+	}
+
+	if !validateFeeCategory {
 		return nil
 	}
 

@@ -97,18 +97,28 @@
                 <v-chip label color="default" variant="outlined" size="x-small" v-else>{{ tt('Unknown') }}</v-chip>
             </template>
             <template #item.actualCategoryName="{ item }">
-                <div class="d-flex align-center" v-if="editingTransaction !== item || item.type === TransactionType.ModifyBalance">
-                    <span v-if="item.type === TransactionType.ModifyBalance">-</span>
-                    <ItemIcon size="24px" :icon-type="getCategoryIconType(allCategoriesMap[item.categoryId]?.iconType)"
-                              :icon-id="allCategoriesMap[item.categoryId]?.icon ?? ''"
-                              :color="allCategoriesMap[item.categoryId]?.color ?? ''"
-                              v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]"></ItemIcon>
-                    <span class="ms-1" v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]">
-                                        {{ allCategoriesMap[item.categoryId]?.name }}
-                                    </span>
-                    <div class="text-error font-italic" v-else-if="item.type !== TransactionType.ModifyBalance && (!item.categoryId || item.categoryId === '0' || !allCategoriesMap[item.categoryId])">
-                        <v-icon class="me-1" :icon="mdiAlertOutline"/>
-                        <span>{{ item.originalCategoryName }}</span>
+                <div v-if="editingTransaction !== item || item.type === TransactionType.ModifyBalance">
+                    <div class="d-flex align-center">
+                        <span v-if="item.type === TransactionType.ModifyBalance">-</span>
+                        <ItemIcon size="24px" :icon-type="getCategoryIconType(allCategoriesMap[item.categoryId]?.iconType)"
+                                  :icon-id="allCategoriesMap[item.categoryId]?.icon ?? ''"
+                                  :color="allCategoriesMap[item.categoryId]?.color ?? ''"
+                                  v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]"></ItemIcon>
+                        <span class="ms-1" v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]">
+                                            {{ allCategoriesMap[item.categoryId]?.name }}
+                                        </span>
+                        <div class="text-error font-italic" v-else-if="item.type !== TransactionType.ModifyBalance && (!item.categoryId || item.categoryId === '0' || !allCategoriesMap[item.categoryId])">
+                            <v-icon class="me-1" :icon="mdiAlertOutline"/>
+                            <span>{{ item.originalCategoryName }}</span>
+                        </div>
+                    </div>
+                    <div class="d-flex align-center text-caption" v-if="item.type === TransactionType.Transfer && isTransferFeeRequired(item)">
+                        <span class="me-1">{{ tt('Transfer Fee Category') }}:</span>
+                        <span v-if="item.feeCategoryId && item.feeCategoryId !== '0' && allCategoriesMap[item.feeCategoryId]">{{ allCategoriesMap[item.feeCategoryId]?.name }}</span>
+                        <div class="text-error font-italic" v-else>
+                            <v-icon class="me-1" :icon="mdiAlertOutline"/>
+                            <span>{{ item.originalFeeCategoryName || tt('None') }}</span>
+                        </div>
                     </div>
                 </div>
                 <div style="width: 260px" v-if="editingTransaction === item && (item.type === TransactionType.Expense || item.type === TransactionType.Refund)">
@@ -164,6 +174,25 @@
                                        :items="allCategories[CategoryType.Transfer]"
                                        v-model="item.categoryId">
                     </two-column-select>
+                    <template v-if="isTransferFeeRequired(item)">
+                        <div class="text-caption text-medium-emphasis mt-2">{{ tt('Transfer Fee Category') }}</div>
+                        <two-column-select density="compact" variant="plain"
+                                           primary-key-field="id" primary-value-field="id" primary-title-field="name"
+                                           primary-icon-field="icon" primary-icon-type-field="iconType" primary-icon-type="category" primary-color-field="color"
+                                           primary-hidden-field="hidden" primary-sub-items-field="subCategories"
+                                           secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
+                                           secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="category" secondary-color-field="color"
+                                           secondary-hidden-field="hidden"
+                                           :disabled="!!disabled || !hasVisibleExpenseCategories"
+                                           :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
+                                           :show-selection-primary-text="true"
+                                           :custom-selection-primary-text="getTransactionPrimaryCategoryName(item.feeCategoryId, allCategories[CategoryType.Expense])"
+                                           :custom-selection-secondary-text="getTransactionSecondaryCategoryName(item.feeCategoryId, allCategories[CategoryType.Expense])"
+                                           :placeholder="tt('Transfer Fee Category')"
+                                           :items="allCategories[CategoryType.Expense]"
+                                           v-model="item.feeCategoryId">
+                        </two-column-select>
+                    </template>
                 </div>
             </template>
             <template #item.sourceAmount="{ item }">
@@ -1342,6 +1371,12 @@ function getTransactionDestinationAccountCurrency(transaction: ImportTransaction
     return currency;
 }
 
+function isTransferFeeRequired(transaction: ImportTransaction): boolean {
+    return transaction.type === TransactionType.Transfer &&
+        transaction.sourceAmount !== transaction.destinationAmount &&
+        getTransactionSourceAccountCurrency(transaction) === getTransactionDestinationAccountCurrency(transaction);
+}
+
 function getTransactionDisplayAmount(transaction: ImportTransaction): string {
     const currency = getTransactionSourceAccountCurrency(transaction);
     return formatAmountToLocalizedNumeralsWithCurrency(parseBigDecimal(transaction.sourceAmount), currency);
@@ -1721,6 +1756,10 @@ function updateTransactionData(transaction: ImportTransaction): void {
         if (transaction.type === TransactionType.Transfer) {
             transaction.valid = false;
         }
+    }
+
+    if (isTransferFeeRequired(transaction) && (!transaction.feeCategoryId || transaction.feeCategoryId === '0' || !allCategoriesMap.value[transaction.feeCategoryId])) {
+        transaction.valid = false;
     }
 
     if (transaction.tagIds && transaction.tagIds.length) {
@@ -2157,7 +2196,8 @@ function exportData(fileType: KnownFileType): void {
         tt(ImportTransactionColumnType.RelatedAmount.name),
         tt(ImportTransactionColumnType.GeographicLocation.name),
         tt(ImportTransactionColumnType.Tags.name),
-        tt(ImportTransactionColumnType.Description.name)
+        tt(ImportTransactionColumnType.Description.name),
+        tt(ImportTransactionColumnType.FeeSubCategory.name)
     ].join(separator) + '\n';
 
     const transactions = props.importTransactions ?? [];
@@ -2172,6 +2212,7 @@ function exportData(fileType: KnownFileType): void {
         let relatedAccountName: string | undefined = undefined;
         let relatedAccountCurrency: string | undefined = undefined;
         let relatedAmount: string | undefined = undefined;
+        let feeCategoryName = '';
 
         if (transaction.type === TransactionType.ModifyBalance) {
             categoryName = '';
@@ -2179,6 +2220,7 @@ function exportData(fileType: KnownFileType): void {
             relatedAccountName = transaction.destinationAccountId && transaction.destinationAccountId !== '0' && allAccountsMap.value[transaction.destinationAccountId] ? (allAccountsMap.value[transaction.destinationAccountId]?.name ?? transaction.originalDestinationAccountName) : transaction.originalDestinationAccountName;
             relatedAccountCurrency = transaction.destinationAccountId && transaction.destinationAccountId !== '0' && allAccountsMap.value[transaction.destinationAccountId] ? (allAccountsMap.value[transaction.destinationAccountId]?.currency ?? transaction.originalDestinationAccountCurrency) : transaction.originalDestinationAccountCurrency;
             relatedAmount = formatAmountToWesternArabicNumeralsWithoutDigitGrouping(parseBigDecimal(transaction.destinationAmount), relatedAccountCurrency);
+            feeCategoryName = transaction.feeCategoryId && transaction.feeCategoryId !== '0' && allCategoriesMap.value[transaction.feeCategoryId] ? (allCategoriesMap.value[transaction.feeCategoryId]?.name ?? transaction.originalFeeCategoryName) : transaction.originalFeeCategoryName;
         }
 
         const tagNames: string[] = [];
@@ -2214,7 +2256,8 @@ function exportData(fileType: KnownFileType): void {
             relatedAmount ?? '',
             geographicLocation,
             tagNames.join(tagSeparator),
-            replaceAll(transaction.comment || '', separator, ' ')
+            replaceAll(transaction.comment || '', separator, ' '),
+            replaceAll(feeCategoryName, separator, ' ')
         ].join(separator);
     });
 

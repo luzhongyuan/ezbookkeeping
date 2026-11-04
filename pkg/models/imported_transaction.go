@@ -8,6 +8,7 @@ type ImportTransaction struct {
 	OriginalTransactionId              int64
 	TagIds                             []string
 	OriginalCategoryName               string
+	OriginalFeeCategoryName            string
 	OriginalSourceAccountName          string
 	OriginalSourceAccountCurrency      string
 	OriginalDestinationAccountName     string
@@ -42,6 +43,8 @@ type ImportTransactionResponse struct {
 	RelatedTransactionId               int64                           `json:"relatedTransactionId,string,omitempty"`
 	CategoryId                         int64                           `json:"categoryId,string"`
 	OriginalCategoryName               string                          `json:"originalCategoryName"`
+	FeeCategoryId                      int64                           `json:"feeCategoryId,string,omitempty"`
+	OriginalFeeCategoryName            string                          `json:"originalFeeCategoryName,omitempty"`
 	Time                               int64                           `json:"time"`
 	UtcOffset                          int16                           `json:"utcOffset"`
 	SourceAccountId                    int64                           `json:"sourceAccountId,string"`
@@ -91,6 +94,8 @@ func (t ImportTransaction) ToImportTransactionResponse() *ImportTransactionRespo
 		RelatedTransactionId:               t.RelatedTransactionId,
 		CategoryId:                         t.CategoryId,
 		OriginalCategoryName:               t.OriginalCategoryName,
+		FeeCategoryId:                      t.FeeCategoryId,
+		OriginalFeeCategoryName:            t.OriginalFeeCategoryName,
 		Time:                               utils.GetUnixTimeFromTransactionTime(t.TransactionTime),
 		UtcOffset:                          t.TimezoneUtcOffset,
 		SourceAccountId:                    t.AccountId,

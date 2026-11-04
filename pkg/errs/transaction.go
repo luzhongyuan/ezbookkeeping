@@ -8,7 +8,6 @@ var (
 	ErrTransactionNotFound                                         = NewNormalError(NormalSubcategoryTransaction, 1, http.StatusBadRequest, "transaction not found")
 	ErrTransactionTypeInvalid                                      = NewNormalError(NormalSubcategoryTransaction, 2, http.StatusBadRequest, "transaction type is invalid")
 	ErrTransactionSourceAndDestinationIdCannotBeEqual              = NewNormalError(NormalSubcategoryTransaction, 3, http.StatusBadRequest, "transaction source and destination account id cannot be equal")
-	ErrTransactionSourceAndDestinationAmountNotEqual               = NewNormalError(NormalSubcategoryTransaction, 4, http.StatusBadRequest, "transaction source and destination amount not equal")
 	ErrTransactionDestinationAccountCannotBeSet                    = NewNormalError(NormalSubcategoryTransaction, 5, http.StatusBadRequest, "transaction destination account cannot be set")
 	ErrTransactionDestinationAmountCannotBeSet                     = NewNormalError(NormalSubcategoryTransaction, 6, http.StatusBadRequest, "transaction destination amount cannot be set")
 	ErrTooMuchTransactionInOneSecond                               = NewNormalError(NormalSubcategoryTransaction, 7, http.StatusBadRequest, "too much transaction in one second")
@@ -61,4 +60,5 @@ var (
 	ErrTransactionBatchCreateNoTransactions                        = NewNormalError(NormalSubcategoryTransaction, 54, http.StatusBadRequest, "no transactions")
 	ErrTransactionBatchCreateTooManyTransactions                   = NewNormalError(NormalSubcategoryTransaction, 55, http.StatusBadRequest, "too many transactions")
 	ErrTransactionDestinationAmountGreaterThanSourceAmount         = NewNormalError(NormalSubcategoryTransaction, 56, http.StatusBadRequest, "transfer destination amount cannot be greater than source amount")
+	ErrTransferFeeCategoryRequired                                 = NewNormalError(NormalSubcategoryTransaction, 57, http.StatusBadRequest, "transfer fee category is required when the source and destination amounts are different")
 )

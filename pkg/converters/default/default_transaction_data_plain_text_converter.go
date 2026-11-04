@@ -36,6 +36,8 @@ var ezbookkeepingDataColumnNameMapping = map[datatable.TransactionDataTableColum
 	datatable.TRANSACTION_DATA_TABLE_DESCRIPTION:              "Description",
 	datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID:           "Transaction Id",
 	datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID:   "Related Transaction Id",
+	datatable.TRANSACTION_DATA_TABLE_FEE_CATEGORY:             "Fee Category",
+	datatable.TRANSACTION_DATA_TABLE_FEE_SUB_CATEGORY:         "Fee Sub Category",
 }
 
 var ezbookkeepingTransactionTypeNameMapping = map[models.TransactionType]string{
@@ -65,12 +67,16 @@ var ezbookkeepingDataColumns = []datatable.TransactionDataTableColumn{
 
 // ToExportedContent returns the exported transaction plain text data
 func (c *defaultTransactionDataPlainTextConverter) ToExportedContent(ctx core.Context, uid int64, transactions []*models.Transaction, accountMap map[int64]*models.Account, categoryMap map[int64]*models.TransactionCategory, tagMap map[int64]*models.TransactionTag, allTagIndexes map[int64][]int64) ([]byte, error) {
-	dataColumns := make([]datatable.TransactionDataTableColumn, 0, len(ezbookkeepingDataColumns)+2)
+	dataColumns := make([]datatable.TransactionDataTableColumn, 0, len(ezbookkeepingDataColumns)+4)
 	dataColumns = append(dataColumns, ezbookkeepingDataColumns...)
 
 	if existsRefundTransaction(transactions) {
 		// the transaction id and the related transaction id are only required for restoring refund transactions
 		dataColumns = append(dataColumns, datatable.TRANSACTION_DATA_TABLE_TRANSACTION_ID, datatable.TRANSACTION_DATA_TABLE_RELATED_TRANSACTION_ID)
+	}
+
+	if existsTransferFeeTransaction(transactions) {
+		dataColumns = append(dataColumns, datatable.TRANSACTION_DATA_TABLE_FEE_CATEGORY, datatable.TRANSACTION_DATA_TABLE_FEE_SUB_CATEGORY)
 	}
 
 	dataTableBuilder := createNewDefaultTransactionPlainTextDataTableBuilder(
@@ -123,6 +129,16 @@ func (c *defaultTransactionDataPlainTextConverter) ParseImportedData(ctx core.Co
 func existsRefundTransaction(transactions []*models.Transaction) bool {
 	for i := 0; i < len(transactions); i++ {
 		if transactions[i].RelatedTransactionId != 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func existsTransferFeeTransaction(transactions []*models.Transaction) bool {
+	for i := 0; i < len(transactions); i++ {
+		if transactions[i].FeeCategoryId > 0 {
 			return true
 		}
 	}

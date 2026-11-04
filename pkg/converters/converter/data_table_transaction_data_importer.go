@@ -190,6 +190,25 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			}
 		}
 
+		feeCategoryId := int64(0)
+		originalFeeCategoryName := ""
+
+		if transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT &&
+			dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_FEE_SUB_CATEGORY) {
+			feeCategoryName := ""
+			originalFeeCategoryName = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_FEE_SUB_CATEGORY)
+
+			if dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_FEE_CATEGORY) {
+				feeCategoryName = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_FEE_CATEGORY)
+			}
+
+			if originalFeeCategoryName != "" {
+				if subCategory, exists := c.getTransactionCategory(expenseCategoryMap, feeCategoryName, originalFeeCategoryName); exists {
+					feeCategoryId = subCategory.CategoryId
+				}
+			}
+		}
+
 		originalTransactionId := int64(0)
 		originalTransactionIdText := ""
 
@@ -422,6 +441,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 				RelatedAccountId:     relatedAccountId,
 				RelatedAccountAmount: relatedAccountAmount,
 				RelatedTransactionId: relatedTransactionId,
+				FeeCategoryId:        feeCategoryId,
 				Comment:              description,
 				GeoLongitude:         geoLongitude,
 				GeoLatitude:          geoLatitude,
@@ -430,6 +450,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			TagIds:                             tagIds,
 			OriginalTransactionId:              originalTransactionId,
 			OriginalCategoryName:               subCategoryName,
+			OriginalFeeCategoryName:            originalFeeCategoryName,
 			OriginalSourceAccountName:          accountName,
 			OriginalSourceAccountCurrency:      accountCurrency,
 			OriginalDestinationAccountName:     account2Name,

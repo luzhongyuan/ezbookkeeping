@@ -34,7 +34,9 @@ export const KNOWN_COLUMN_NAME_MAPPING: Record<string, ImportTransactionColumnTy
         ['Account2 Amount']: ImportTransactionColumnType.RelatedAmount,
         ['Geographic Location']: ImportTransactionColumnType.GeographicLocation,
         ['Tags']: ImportTransactionColumnType.Tags,
-        ['Description']: ImportTransactionColumnType.Description
+        ['Description']: ImportTransactionColumnType.Description,
+        ['Fee Category']: ImportTransactionColumnType.FeeCategory,
+        ['Fee Sub Category']: ImportTransactionColumnType.FeeSubCategory
     },
     // Other common columns of transaction time
     {

@@ -103,6 +103,8 @@ export class ImportTransactionColumnType implements TypeAndName {
     public static readonly GeographicLocation = new ImportTransactionColumnType(12, 'Geographic Location');
     public static readonly Tags = new ImportTransactionColumnType(13, 'Tags');
     public static readonly Description = new ImportTransactionColumnType(14, 'Description');
+    public static readonly FeeCategory = new ImportTransactionColumnType(17, 'Transfer Fee Category');
+    public static readonly FeeSubCategory = new ImportTransactionColumnType(18, 'Transfer Fee Secondary Category');
 
     public readonly type: number;
     public readonly name: string;

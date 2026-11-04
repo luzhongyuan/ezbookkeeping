@@ -37,7 +37,7 @@ func (c *DataTableTransactionDataExporter) BuildExportedContent(ctx core.Context
 			continue
 		}
 
-		dataRowMap := make(map[datatable.TransactionDataTableColumn]string, 15)
+		dataRowMap := make(map[datatable.TransactionDataTableColumn]string, 17)
 		transactionUnixTime := utils.GetUnixTimeFromTransactionTime(transaction.TransactionTime)
 		transactionTimeZone := time.FixedZone("Transaction Timezone", int(transaction.TimezoneUtcOffset)*60)
 
@@ -70,6 +70,11 @@ func (c *DataTableTransactionDataExporter) BuildExportedContent(ctx core.Context
 			dataRowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_ACCOUNT_NAME] = c.getExportedAccountName(dataTableBuilder, transaction.AccountId, accountMap)
 			dataRowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_ACCOUNT_CURRENCY] = c.getAccountCurrency(dataTableBuilder, transaction.AccountId, accountMap)
 			dataRowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_AMOUNT] = utils.FormatAmount(transaction.Amount)
+		}
+
+		if (transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN) && transaction.FeeCategoryId > 0 {
+			dataRowMap[datatable.TRANSACTION_DATA_TABLE_FEE_CATEGORY] = c.getExportedTransactionCategoryName(dataTableBuilder, transaction.FeeCategoryId, categoryMap)
+			dataRowMap[datatable.TRANSACTION_DATA_TABLE_FEE_SUB_CATEGORY] = c.getExportedTransactionSubCategoryName(dataTableBuilder, transaction.FeeCategoryId, categoryMap)
 		}
 
 		dataRowMap[datatable.TRANSACTION_DATA_TABLE_GEOGRAPHIC_LOCATION] = c.getExportedGeographicLocation(transaction)

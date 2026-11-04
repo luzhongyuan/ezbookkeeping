@@ -1651,3 +1651,92 @@ func TestGetRelatedTransferTransaction_CopyFeeCategory(t *testing.T) {
 	assert.Equal(t, int64(1000), actualValue.RelatedAccountAmount)
 	assert.Equal(t, int64(567), actualValue.FeeCategoryId)
 }
+
+func TestVerifyTransferFee(t *testing.T) {
+	usdSourceAccount := &models.Account{Currency: "USD"}
+	usdDestinationAccount := &models.Account{Currency: "USD"}
+	eurDestinationAccount := &models.Account{Currency: "EUR"}
+
+	tests := []struct {
+		name                  string
+		transaction           *models.Transaction
+		sourceAccount         *models.Account
+		destinationAccount    *models.Account
+		validateFeeCategory   bool
+		expectedError         error
+		expectedFeeCategoryId int64
+	}{
+		{
+			name:                  "non-transfer transaction",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_EXPENSE, Amount: 1000, FeeCategoryId: 567},
+			sourceAccount:         usdSourceAccount,
+			destinationAccount:    nil,
+			validateFeeCategory:   true,
+			expectedError:         nil,
+			expectedFeeCategoryId: 0,
+		},
+		{
+			name:                  "missing accounts",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_TRANSFER_OUT, Amount: 1000, RelatedAccountAmount: 990, FeeCategoryId: 567},
+			sourceAccount:         nil,
+			destinationAccount:    nil,
+			validateFeeCategory:   true,
+			expectedError:         nil,
+			expectedFeeCategoryId: 0,
+		},
+		{
+			name:                  "different currencies",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_TRANSFER_OUT, Amount: 1000, RelatedAccountAmount: 990, FeeCategoryId: 567},
+			sourceAccount:         usdSourceAccount,
+			destinationAccount:    eurDestinationAccount,
+			validateFeeCategory:   true,
+			expectedError:         nil,
+			expectedFeeCategoryId: 0,
+		},
+		{
+			name:                  "destination amount greater than source amount",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_TRANSFER_OUT, Amount: 990, RelatedAccountAmount: 1000, FeeCategoryId: 567},
+			sourceAccount:         usdSourceAccount,
+			destinationAccount:    usdDestinationAccount,
+			validateFeeCategory:   true,
+			expectedError:         errs.ErrTransactionDestinationAmountGreaterThanSourceAmount,
+			expectedFeeCategoryId: 567,
+		},
+		{
+			name:                  "equal amounts",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_TRANSFER_OUT, Amount: 1000, RelatedAccountAmount: 1000, FeeCategoryId: 567},
+			sourceAccount:         usdSourceAccount,
+			destinationAccount:    usdDestinationAccount,
+			validateFeeCategory:   true,
+			expectedError:         nil,
+			expectedFeeCategoryId: 0,
+		},
+		{
+			name:                  "fee amount without fee category",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_TRANSFER_OUT, Amount: 1000, RelatedAccountAmount: 990},
+			sourceAccount:         usdSourceAccount,
+			destinationAccount:    usdDestinationAccount,
+			validateFeeCategory:   true,
+			expectedError:         errs.ErrTransferFeeCategoryRequired,
+			expectedFeeCategoryId: 0,
+		},
+		{
+			name:                  "unchanged fee category is not re-validated",
+			transaction:           &models.Transaction{Type: models.TRANSACTION_DB_TYPE_TRANSFER_OUT, Amount: 1000, RelatedAccountAmount: 990, FeeCategoryId: 567},
+			sourceAccount:         usdSourceAccount,
+			destinationAccount:    usdDestinationAccount,
+			validateFeeCategory:   false,
+			expectedError:         nil,
+			expectedFeeCategoryId: 567,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := Transactions.verifyTransferFee(nil, testCase.transaction, testCase.sourceAccount, testCase.destinationAccount, testCase.validateFeeCategory)
+
+			assert.Equal(t, testCase.expectedError, err)
+			assert.Equal(t, testCase.expectedFeeCategoryId, testCase.transaction.FeeCategoryId)
+		})
+	}
+}

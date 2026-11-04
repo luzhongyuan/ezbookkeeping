@@ -9,6 +9,8 @@ export class ImportTransaction implements ImportTransactionResponse {
     public relatedTransactionId: string;
     public categoryId: string;
     public originalCategoryName: string;
+    public feeCategoryId: string;
+    public originalFeeCategoryName: string;
     public time: number;
     public utcOffset: number;
     public sourceAccountId: string;
@@ -37,6 +39,8 @@ export class ImportTransaction implements ImportTransactionResponse {
         this.relatedTransactionId = response.relatedTransactionId || '0';
         this.categoryId = response.categoryId;
         this.originalCategoryName = response.originalCategoryName;
+        this.feeCategoryId = response.feeCategoryId || '0';
+        this.originalFeeCategoryName = response.originalFeeCategoryName || '';
         this.time = response.time;
         this.utcOffset = response.utcOffset;
         this.sourceAccountId = response.sourceAccountId;
@@ -72,6 +76,7 @@ export class ImportTransaction implements ImportTransactionResponse {
             destinationAccountId: this.type === TransactionType.Transfer ? this.destinationAccountId : '0',
             sourceAmount: this.sourceAmount,
             destinationAmount: this.type === TransactionType.Transfer ? this.destinationAmount : 0,
+            feeCategoryId: this.type === TransactionType.Transfer ? this.feeCategoryId : '0',
             hideAmount: false,
             tagIds: this.tagIds,
             pictureIds: [],
@@ -91,6 +96,13 @@ export class ImportTransaction implements ImportTransactionResponse {
         }
 
         if (this.type === TransactionType.Transfer && (!this.destinationAccountId || this.destinationAccountId === '0')) {
+            return false;
+        }
+
+        if (this.type === TransactionType.Transfer &&
+            this.originalSourceAccountCurrency === this.originalDestinationAccountCurrency &&
+            this.sourceAmount !== this.destinationAmount &&
+            (!this.feeCategoryId || this.feeCategoryId === '0')) {
             return false;
         }
 
@@ -142,6 +154,8 @@ export interface ImportTransactionResponse {
     readonly relatedTransactionId?: string;
     readonly categoryId: string;
     readonly originalCategoryName: string;
+    readonly feeCategoryId?: string;
+    readonly originalFeeCategoryName?: string;
     readonly time: number;
     readonly utcOffset: number;
     readonly sourceAccountId: string;

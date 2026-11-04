@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"xorm.io/builder"
 	"xorm.io/xorm"
 
 	"github.com/mayswind/ezbookkeeping/pkg/core"
@@ -389,7 +390,10 @@ func (s *TransactionCategoryService) DeleteCategory(c core.Context, uid int64, c
 			categoryAndSubCategoryIds[i] = categoryAndSubCategories[i].CategoryId
 		}
 
-		exists, err := sess.Cols("uid", "deleted", "category_id").Where("uid=? AND deleted=?", uid, false).In("category_id", categoryAndSubCategoryIds).Limit(1).Exist(&models.Transaction{})
+		exists, err := sess.Cols("uid", "deleted", "category_id", "fee_category_id").Where("uid=? AND deleted=?", uid, false).And(builder.Or(
+			builder.In("category_id", categoryAndSubCategoryIds),
+			builder.In("fee_category_id", categoryAndSubCategoryIds),
+		)).Limit(1).Exist(&models.Transaction{})
 
 		if err != nil {
 			return err
