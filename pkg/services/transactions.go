@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -1072,12 +1073,14 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 			return errs.ErrCannotModifyTransactionInParentAccount
 		}
 
-		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT && sourceAccount.Currency == destinationAccount.Currency && transaction.Amount != transaction.RelatedAccountAmount {
-			return errs.ErrTransactionSourceAndDestinationAmountNotEqual
-		}
-
 		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT && (transaction.Amount < 0 || transaction.RelatedAccountAmount < 0) {
 			return errs.ErrTransferTransactionAmountCannotBeLessThanZero
+		}
+
+		err = s.verifyTransferFee(sess, transaction, sourceAccount, destinationAccount)
+
+		if err != nil {
+			return err
 		}
 
 		oldSourceAccount, oldDestinationAccount, err := s.getOldAccountModels(sess, transaction, oldTransaction, sourceAccount, destinationAccount)
@@ -1165,6 +1168,10 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 			transaction.RelatedAccountAmount = 0
 			updateCols = append(updateCols, "related_account_id")
 			updateCols = append(updateCols, "related_account_amount")
+		}
+
+		if transaction.FeeCategoryId != oldTransaction.FeeCategoryId {
+			updateCols = append(updateCols, "fee_category_id")
 		}
 
 		if transaction.HideAmount != oldTransaction.HideAmount {
@@ -2303,6 +2310,7 @@ func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *
 		RelatedId:            originalTransaction.TransactionId,
 		RelatedAccountId:     originalTransaction.AccountId,
 		RelatedAccountAmount: originalTransaction.Amount,
+		FeeCategoryId:        originalTransaction.FeeCategoryId,
 		Comment:              originalTransaction.Comment,
 		GeoLongitude:         originalTransaction.GeoLongitude,
 		GeoLatitude:          originalTransaction.GeoLatitude,
@@ -2360,6 +2368,20 @@ func (s *TransactionService) GetAccountsTotalIncomeAndExpense(c core.Context, ui
 			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			amountsMap = expenseAmounts
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			// the difference between the source and destination amount is the transfer fee
+			feeAmount := transaction.Amount - transaction.RelatedAccountAmount
+
+			if transaction.FeeCategoryId <= 0 || feeAmount <= 0 || slices.Contains(excludeCategoryIds, transaction.FeeCategoryId) {
+				continue
+			}
+
+			amountsMap = expenseAmounts
+			amount = feeAmount
+		}
+
+		if amountsMap == nil {
+			continue
 		}
 
 		totalAmounts, exists := amountsMap[transaction.AccountId]
@@ -2421,6 +2443,20 @@ func (s *TransactionService) GetAccountsDailyIncomeAndExpense(c core.Context, ui
 			}
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			allAmounts = expenseAmounts
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			// the difference between the source and destination amount is the transfer fee
+			feeAmount := transaction.Amount - transaction.RelatedAccountAmount
+
+			if transaction.FeeCategoryId <= 0 || feeAmount <= 0 || slices.Contains(excludeCategoryIds, transaction.FeeCategoryId) {
+				continue
+			}
+
+			allAmounts = expenseAmounts
+			transactionAmount = feeAmount
+		}
+
+		if allAmounts == nil {
+			continue
 		}
 
 		yearMonthDay := utils.FormatUnixTimeToNumericYearMonthDay(unixTime, timeZone)
@@ -2503,7 +2539,7 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 			finalConditionParams = append(finalConditionParams, "%%"+keyword+"%%")
 		}
 
-		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount, related_transaction_id").Where(finalCondition, finalConditionParams...)
+		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount, related_account_amount, fee_category_id, related_transaction_id").Where(finalCondition, finalConditionParams...)
 		sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 
 		err := sess.Limit(pageCountForLoadTransactionAmounts, 0).OrderBy("transaction_time desc").Find(&transactions)
@@ -2545,6 +2581,29 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 			// refund transaction offsets the expense of the original transaction
 			transactionType = models.TRANSACTION_DB_TYPE_EXPENSE
 			transactionAmount = -transactionAmount
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT && transaction.FeeCategoryId > 0 {
+			// the difference between the source and destination amount is the transfer fee
+			feeAmount := transaction.Amount - transaction.RelatedAccountAmount
+
+			if feeAmount > 0 {
+				feeGroupKey := fmt.Sprintf("%d_%d", transaction.FeeCategoryId, transaction.AccountId)
+				feeTotalAmounts, exists := transactionTotalAmountsMap[feeGroupKey]
+
+				if !exists {
+					feeTotalAmounts = &models.TransactionTotalAmount{
+						Type:       models.TRANSACTION_DB_TYPE_EXPENSE,
+						CategoryId: transaction.FeeCategoryId,
+						AccountId:  transaction.AccountId,
+						Amount:     big.NewInt(0),
+					}
+
+					transactionTotalAmountsMap[feeGroupKey] = feeTotalAmounts
+				}
+
+				feeTotalAmounts.Amount.Add(feeTotalAmounts.Amount, big.NewInt(feeAmount))
+				// the transfer amount does not include the fee, so that the fee is not counted twice
+				transactionAmount = transaction.RelatedAccountAmount
+			}
 		}
 
 		groupKey := fmt.Sprintf("%d_%d", transaction.CategoryId, transaction.AccountId)
@@ -2669,7 +2728,7 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 			finalConditionParams = append(finalConditionParams, "%%"+keyword+"%%")
 		}
 
-		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount, related_transaction_id").Where(finalCondition, finalConditionParams...)
+		sess := s.UserDataDB(uid).NewSession(c).Select("type, category_id, account_id, related_account_id, transaction_time, timezone_utc_offset, amount, related_account_amount, fee_category_id, related_transaction_id").Where(finalCondition, finalConditionParams...)
 		sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
 
 		err := sess.Limit(pageCountForLoadTransactionAmounts, 0).OrderBy("transaction_time desc").Find(&transactions)
@@ -2714,6 +2773,29 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 			// refund transaction offsets the expense of the original transaction
 			transactionType = models.TRANSACTION_DB_TYPE_EXPENSE
 			transactionAmount = -transactionAmount
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT && transaction.FeeCategoryId > 0 {
+			// the difference between the source and destination amount is the transfer fee
+			feeAmount := transaction.Amount - transaction.RelatedAccountAmount
+
+			if feeAmount > 0 {
+				feeGroupKey := fmt.Sprintf("%d_%d_%d", yearMonth, transaction.FeeCategoryId, transaction.AccountId)
+				feeTransactionAmounts, exists := transactionsMonthlyAmountsMap[feeGroupKey]
+
+				if !exists {
+					feeTransactionAmounts = &models.TransactionTotalAmount{
+						Type:       models.TRANSACTION_DB_TYPE_EXPENSE,
+						CategoryId: transaction.FeeCategoryId,
+						AccountId:  transaction.AccountId,
+						Amount:     big.NewInt(0),
+					}
+
+					transactionsMonthlyAmountsMap[feeGroupKey] = feeTransactionAmounts
+				}
+
+				feeTransactionAmounts.Amount.Add(feeTransactionAmounts.Amount, big.NewInt(feeAmount))
+				// the transfer amount does not include the fee, so that the fee is not counted twice
+				transactionAmount = transaction.RelatedAccountAmount
+			}
 		}
 
 		groupKey := fmt.Sprintf("%d_%d_%d", yearMonth, transaction.CategoryId, transaction.AccountId)
@@ -2795,13 +2877,14 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 	}
 
 	if (transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN) &&
-		sourceAccount.Currency == destinationAccount.Currency && transaction.Amount != transaction.RelatedAccountAmount {
-		return errs.ErrTransactionSourceAndDestinationAmountNotEqual
-	}
-
-	if (transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN) &&
 		(transaction.Amount < 0 || transaction.RelatedAccountAmount < 0) {
 		return errs.ErrTransferTransactionAmountCannotBeLessThanZero
+	}
+
+	err = s.verifyTransferFee(sess, transaction, sourceAccount, destinationAccount)
+
+	if err != nil {
+		return err
 	}
 
 	// Get and verify related transaction (for refund transaction)
@@ -3078,12 +3161,13 @@ func (s *TransactionService) getAllTransactionsInSpecifiedDateRange(c core.Conte
 	startTransactionTime := utils.GetMinTransactionTimeFromUnixTime(startUnixTime)
 	endTransactionTime := utils.GetMaxTransactionTimeFromUnixTime(endUnixTime)
 
-	condition := "uid=? AND deleted=? AND (type=? OR type=?)"
-	conditionParams := make([]any, 0, 4+len(excludeAccountIds)+len(excludeCategoryIds))
+	condition := "uid=? AND deleted=? AND (type=? OR type=? OR type=?)"
+	conditionParams := make([]any, 0, 5+len(excludeAccountIds)+len(excludeCategoryIds))
 	conditionParams = append(conditionParams, uid)
 	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_INCOME)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_EXPENSE)
+	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_OUT)
 
 	if len(excludeAccountIds) > 0 {
 		var accountIdsCondition strings.Builder
@@ -3133,7 +3217,7 @@ func (s *TransactionService) getAllTransactionsInSpecifiedDateRange(c core.Conte
 		finalConditionParams = append(finalConditionParams, minTransactionTime)
 		finalConditionParams = append(finalConditionParams, maxTransactionTime)
 
-		sess := s.UserDataDB(uid).NewSession(c).Select("type, account_id, transaction_time, timezone_utc_offset, amount, related_transaction_id").Where(condition, finalConditionParams...)
+		sess := s.UserDataDB(uid).NewSession(c).Select("type, account_id, transaction_time, timezone_utc_offset, amount, related_account_amount, fee_category_id, related_transaction_id").Where(condition, finalConditionParams...)
 		sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, false)
 
 		err := sess.Limit(pageCountForLoadTransactionAmounts, 0).OrderBy("transaction_time desc").Find(&transactions)
@@ -3815,6 +3899,56 @@ func (s *TransactionService) isCategoryValid(sess *xorm.Session, transaction *mo
 		if parentCategory.Hidden {
 			return errs.ErrCannotUseHiddenTransactionCategory
 		}
+	}
+
+	return nil
+}
+
+func (s *TransactionService) verifyTransferFee(sess *xorm.Session, transaction *models.Transaction, sourceAccount *models.Account, destinationAccount *models.Account) error {
+	if transaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT && transaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+		transaction.FeeCategoryId = 0
+		return nil
+	}
+
+	if sourceAccount == nil || destinationAccount == nil {
+		transaction.FeeCategoryId = 0
+		return nil
+	}
+
+	if sourceAccount.Currency != destinationAccount.Currency {
+		// the difference between the source and destination amount is caused by the exchange rate
+		transaction.FeeCategoryId = 0
+		return nil
+	}
+
+	if transaction.RelatedAccountAmount > transaction.Amount {
+		return errs.ErrTransactionDestinationAmountGreaterThanSourceAmount
+	}
+
+	if transaction.RelatedAccountAmount == transaction.Amount || transaction.FeeCategoryId == 0 {
+		transaction.FeeCategoryId = 0
+		return nil
+	}
+
+	category := &models.TransactionCategory{}
+	has, err := sess.ID(transaction.FeeCategoryId).Where("uid=? AND deleted=?", transaction.Uid, false).Get(category)
+
+	if err != nil {
+		return err
+	} else if !has {
+		return errs.ErrTransactionCategoryNotFound
+	}
+
+	if category.Hidden {
+		return errs.ErrCannotUseHiddenTransactionCategory
+	}
+
+	if category.ParentCategoryId == models.LevelOneTransactionCategoryParentId {
+		return errs.ErrCannotUsePrimaryCategoryForTransaction
+	}
+
+	if category.Type != models.CATEGORY_TYPE_EXPENSE {
+		return errs.ErrTransactionCategoryTypeInvalid
 	}
 
 	return nil

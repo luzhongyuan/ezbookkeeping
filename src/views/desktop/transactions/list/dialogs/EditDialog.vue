@@ -173,6 +173,34 @@
                                                   :enable-formula="mode !== TransactionEditPageMode.View"
                                                   v-model="transaction.destinationAmount"/>
                                 </v-col>
+                                <v-col cols="12" :md="6" v-if="hasTransferFee">
+                                    <div class="text-body-small text-medium-emphasis">{{ tt('Transfer Fee') }}</div>
+                                    <div class="text-h6 font-weight-bold">{{ getDisplayAmount(parseBigDecimal(transferFeeAmount), transaction.hideAmount, sourceAccountCurrency) }}</div>
+                                </v-col>
+                                <v-col cols="12" :md="6" v-if="hasTransferFee">
+                                    <v-tooltip :disabled="hasVisibleExpenseCategories" :text="hasVisibleExpenseCategories ? '' : tt('No secondary expense categories are available')">
+                                        <template v-slot:activator="{ props }">
+                                            <div v-bind="props" class="d-block">
+                                                <two-column-select primary-key-field="id" primary-value-field="id" primary-title-field="name"
+                                                                   primary-icon-field="icon" primary-icon-type-field="iconType" primary-icon-type="category" primary-color-field="color"
+                                                                   primary-hidden-field="hidden" primary-sub-items-field="subCategories"
+                                                                   secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
+                                                                   secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="category" secondary-color-field="color"
+                                                                   secondary-hidden-field="hidden"
+                                                                   :readonly="mode === TransactionEditPageMode.View"
+                                                                   :disabled="loading || submitting || recognizing || !hasVisibleExpenseCategories"
+                                                                   :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
+                                                                   :show-selection-primary-text="true"
+                                                                   :custom-selection-primary-text="getTransactionPrimaryCategoryName(transaction.feeCategoryId, allCategories[CategoryType.Expense])"
+                                                                   :custom-selection-secondary-text="getTransactionSecondaryCategoryName(transaction.feeCategoryId, allCategories[CategoryType.Expense])"
+                                                                   :label="tt('Transfer Fee Category')" :placeholder="tt('Transfer Fee Category')"
+                                                                   :items="allCategories[CategoryType.Expense] || []"
+                                                                   v-model="transaction.feeCategoryId">
+                                                </two-column-select>
+                                            </div>
+                                        </template>
+                                    </v-tooltip>
+                                </v-col>
                                 <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Expense || transaction.type === TransactionType.Refund">
                                     <v-tooltip :disabled="hasVisibleExpenseCategories" :text="hasVisibleExpenseCategories ? '' : tt('No secondary expense categories are available')">
                                         <template v-slot:activator="{ props }">
@@ -679,6 +707,8 @@ const {
     destinationAccountName,
     sourceAccountCurrency,
     destinationAccountCurrency,
+    transferFeeAmount,
+    hasTransferFee,
     transactionDisplayTimezone,
     transactionTimezoneTimeDifference,
     geoLocationStatusInfo,

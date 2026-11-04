@@ -205,6 +205,8 @@ export function setTransactionModelByTransaction(transaction: Transaction, trans
             transaction.destinationAmount = 0;
         }
 
+        transaction.feeCategoryId = transaction2.feeCategoryId || '0';
+
         transaction.hideAmount = transaction2.hideAmount;
         transaction.tagIds = transaction2.tagIds ? [...transaction2.tagIds] : [];
         transaction.setPictures(TransactionPicture.ofMulti(transaction2.pictures || []));

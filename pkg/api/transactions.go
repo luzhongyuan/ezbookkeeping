@@ -1534,6 +1534,7 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	if newTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
 		newTransaction.RelatedAccountId = transactionModifyReq.DestinationAccountId
 		newTransaction.RelatedAccountAmount = transactionModifyReq.DestinationAmount
+		newTransaction.FeeCategoryId = transactionModifyReq.FeeCategoryId
 	}
 
 	if transactionModifyReq.GeoLocation != nil {
@@ -1549,6 +1550,7 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 		newTransaction.Amount == transaction.Amount &&
 		(newTransaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT || newTransaction.RelatedAccountId == transaction.RelatedAccountId) &&
 		(newTransaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT || newTransaction.RelatedAccountAmount == transaction.RelatedAccountAmount) &&
+		(newTransaction.Type != models.TRANSACTION_DB_TYPE_TRANSFER_OUT || newTransaction.FeeCategoryId == transaction.FeeCategoryId) &&
 		newTransaction.HideAmount == transaction.HideAmount &&
 		newTransaction.Comment == transaction.Comment &&
 		newTransaction.GeoLongitude == transaction.GeoLongitude &&
@@ -3572,6 +3574,7 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 	if transactionCreateReq.Type == models.TRANSACTION_TYPE_TRANSFER {
 		transaction.RelatedAccountId = transactionCreateReq.DestinationAccountId
 		transaction.RelatedAccountAmount = transactionCreateReq.DestinationAmount
+		transaction.FeeCategoryId = transactionCreateReq.FeeCategoryId
 	}
 
 	if transactionCreateReq.Type == models.TRANSACTION_TYPE_REFUND {

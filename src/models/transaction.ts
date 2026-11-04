@@ -26,6 +26,7 @@ export class Transaction implements TransactionInfoResponse {
     public destinationAccountId: string;
     public sourceAmount: number;
     public destinationAmount: number;
+    public feeCategoryId: string = '0';
     public hideAmount: boolean;
     public tagIds: string[];
     public comment: string;
@@ -256,6 +257,7 @@ export class Transaction implements TransactionInfoResponse {
             destinationAccountId: this.type === TransactionType.Transfer ? this.destinationAccountId : '0',
             sourceAmount: this.sourceAmount,
             destinationAmount: this.type === TransactionType.Transfer ? this.destinationAmount : 0,
+            feeCategoryId: this.type === TransactionType.Transfer ? this.feeCategoryId : '0',
             relatedTransactionId: this.type === TransactionType.Refund ? this.relatedTransactionId : '0',
             hideAmount: this.hideAmount,
             tagIds: this.tagIds,
@@ -283,6 +285,7 @@ export class Transaction implements TransactionInfoResponse {
             destinationAccountId: this.type === TransactionType.Transfer ? this.destinationAccountId : '0',
             sourceAmount: this.sourceAmount,
             destinationAmount: this.type === TransactionType.Transfer ? this.destinationAmount : 0,
+            feeCategoryId: this.type === TransactionType.Transfer ? this.feeCategoryId : '0',
             hideAmount: this.hideAmount,
             tagIds: this.tagIds,
             pictureIds: this.getPictureIds(),
@@ -305,6 +308,7 @@ export class Transaction implements TransactionInfoResponse {
             sourceAmount: this.sourceAmount,
             destinationAccountId: this.type === TransactionType.Transfer ? this.destinationAccountId : '0',
             destinationAmount: this.type === TransactionType.Transfer ? this.destinationAmount : 0,
+            feeCategoryId: this.type === TransactionType.Transfer ? this.feeCategoryId : '0',
             hideAmount: this.hideAmount,
             tagIds: this.tagIds,
             pictures: this.pictures,
@@ -351,6 +355,7 @@ export class Transaction implements TransactionInfoResponse {
             transactionResponse.editable
         );
 
+        transaction.feeCategoryId = transactionResponse.feeCategoryId ?? '0';
         transaction.relatedTransactionId = transactionResponse.relatedTransactionId ?? '0';
         transaction.refundedAmount = transactionResponse.refundedAmount ?? 0;
         transaction.refunds = transactionResponse.refunds ?? [];
@@ -426,6 +431,8 @@ export class Transaction implements TransactionInfoResponse {
             transactionDraft.comment ?? '', // comment
             true // editable
         );
+
+        transaction.feeCategoryId = transactionDraft.feeCategoryId ?? '0';
 
         if (transactionDraft.pictures) {
             const pictures: TransactionPicture[] = [];
@@ -540,6 +547,7 @@ export interface TransactionDraft {
     readonly sourceAmount?: number;
     readonly destinationAccountId?: string;
     readonly destinationAmount?: number;
+    readonly feeCategoryId?: string;
     readonly hideAmount?: boolean;
     readonly tagIds?: string[];
     readonly pictures?: TransactionPictureInfoBasicResponse[];
@@ -560,6 +568,7 @@ export interface TransactionCreateRequest {
     readonly destinationAccountId: string;
     readonly sourceAmount: number;
     readonly destinationAmount: number;
+    readonly feeCategoryId?: string;
     readonly relatedTransactionId?: string;
     readonly originalTransactionId?: string;
     readonly hideAmount: boolean;
@@ -580,6 +589,7 @@ export interface TransactionModifyRequest {
     readonly destinationAccountId: string;
     readonly sourceAmount: number;
     readonly destinationAmount: number;
+    readonly feeCategoryId?: string;
     readonly hideAmount: boolean;
     readonly tagIds: string[];
     readonly pictureIds: string[];
@@ -709,6 +719,7 @@ export interface TransactionInfoResponse {
     readonly destinationAccount?: AccountInfoResponse;
     readonly sourceAmount: number;
     readonly destinationAmount: number;
+    readonly feeCategoryId?: string;
     readonly relatedTransactionId?: string;
     readonly refundedAmount?: number;
     readonly refunds?: TransactionRefundInfoResponse[];

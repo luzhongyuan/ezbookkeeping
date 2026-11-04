@@ -14,6 +14,7 @@ import type { BigDecimal, NumeralSystem } from '@/core/numeral.ts';
 import type { WeekDayValue } from '@/core/datetime.ts';
 import type { LocalizedTimezoneInfo } from '@/core/timezone.ts';
 import { ImageUploadQualityType } from '@/core/image.ts';
+import { CategoryType } from '@/core/category.ts';
 import { TransactionType, TransactionQuickAddButtonActionType } from '@/core/transaction.ts';
 import { TemplateType } from '@/core/template.ts';
 import { DISPLAY_HIDDEN_AMOUNT } from '@/consts/numeral.ts';
@@ -50,6 +51,10 @@ import {
     type SetTransactionOptions,
     setTransactionModelByTransaction
 } from '@/lib/transaction.ts';
+
+import {
+    getFirstVisibleCategoryId
+} from '@/lib/category.ts';
 
 export enum TransactionEditPageType {
     Transaction = 'transaction',
@@ -311,6 +316,23 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
         return defaultCurrency.value;
     });
 
+    const isTransferFeeSupported = computed<boolean>(() => {
+        return type === TransactionEditPageType.Transaction &&
+            transaction.value.type === TransactionType.Transfer &&
+            sourceAccountCurrency.value === destinationAccountCurrency.value;
+    });
+
+    const transferFeeAmount = computed<number>(() => {
+        if (!isTransferFeeSupported.value) {
+            return 0;
+        }
+
+        const feeAmount = transaction.value.sourceAmount - transaction.value.destinationAmount;
+        return feeAmount > 0 ? feeAmount : 0;
+    });
+
+    const hasTransferFee = computed<boolean>(() => transferFeeAmount.value > 0);
+
     const transactionDisplayTimezone = computed<string>(() => {
         let utcOffsetMinutes: number = transaction.value.utcOffset;
 
@@ -380,6 +402,14 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
 
             if (!transaction.value.destinationAccountId || transaction.value.destinationAccountId === '') {
                 return 'Destination account cannot be blank';
+            }
+
+            if (isTransferFeeSupported.value && transaction.value.destinationAmount > transaction.value.sourceAmount) {
+                return 'Transfer in amount cannot be greater than transfer out amount';
+            }
+
+            if (hasTransferFee.value && (!transaction.value.feeCategoryId || transaction.value.feeCategoryId === '0')) {
+                return 'Transfer fee category cannot be blank';
             }
         }
 
@@ -558,6 +588,12 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
         }
     });
 
+    watch([() => hasTransferFee.value, () => allCategories.value[CategoryType.Expense]], ([hasFee]) => {
+        if (hasFee && mode.value !== TransactionEditPageMode.View && (!transaction.value.feeCategoryId || transaction.value.feeCategoryId === '0')) {
+            transaction.value.feeCategoryId = getFirstVisibleCategoryId(allCategories.value[CategoryType.Expense]) || '0';
+        }
+    });
+
     // Watch for account changes and recalculate destination amount for transfers
     watch(() => [transaction.value.sourceAccountId, transaction.value.destinationAccountId], ([newSourceAccountId, newDestinationAccountId], [oldSourceAccountId, oldDestinationAccountId]) => {
         if (mode.value === TransactionEditPageMode.View || loading.value) {
@@ -628,6 +664,9 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
         destinationAccountName,
         sourceAccountCurrency,
         destinationAccountCurrency,
+        isTransferFeeSupported,
+        transferFeeAmount,
+        hasTransferFee,
         transactionDisplayTimezone,
         transactionTimezoneTimeDifference,
         geoLocationStatusInfo,

@@ -497,6 +497,30 @@ export const useTransactionsStore = defineStore('transactions', () => {
                     inflowOutflowDailyTotalAmount.income = inflowOutflowDailyTotalAmount.income.add(amount);
                 }
             }
+
+            if (transaction.type === TransactionType.Transfer && transaction.feeCategoryId && transaction.feeCategoryId !== '0' && transaction.sourceAccount) {
+                const transferFeeAmount = parseBigDecimal(transaction.sourceAmount).subtract(parseBigDecimal(transaction.destinationAmount));
+
+                if (transferFeeAmount.isPositive() &&
+                    (totalAccountIdsCount === 0 || allAccountIdsMap[transaction.sourceAccount.id] || allAccountIdsMap[transaction.sourceAccount.parentId])) {
+                    let transferFeeAmountInDefaultCurrency: BigDecimal = transferFeeAmount;
+
+                    if (transaction.sourceAccount.currency !== defaultCurrency) {
+                        const balance = exchangeRatesStore.getExchangedAmount(transferFeeAmount, transaction.sourceAccount.currency, defaultCurrency);
+
+                        if (balance) {
+                            transferFeeAmountInDefaultCurrency = balance;
+                        } else {
+                            hasUnCalculatedTotalExpense = true;
+                            incomeExpenseDailyTotalAmount.incompleteExpense = true;
+                            transferFeeAmountInDefaultCurrency = BIG_DECIMAL_ZERO;
+                        }
+                    }
+
+                    totalExpense = totalExpense.add(transferFeeAmountInDefaultCurrency);
+                    incomeExpenseDailyTotalAmount.expense = incomeExpenseDailyTotalAmount.expense.add(transferFeeAmountInDefaultCurrency);
+                }
+            }
         }
 
         transactionMonthList.inflowOutflowTotalAmount.transactionCount = transactionMonthList.items.length;
@@ -724,6 +748,21 @@ export const useTransactionsStore = defineStore('transactions', () => {
                     newValueToSet = exchangedNewValue.truncate();
                     newValueToSet = getAmountWithDecimalNumberCount(newValueToSet, decimalNumberCount);
                 } else {
+                    return;
+                }
+            }
+
+            if (sourceAccount.currency === destinationAccount.currency) {
+                const oldDestinationAmount = parseBigDecimal(transaction.destinationAmount);
+                const feeAmount = oldValueToCompare.subtract(oldDestinationAmount);
+
+                if (oldDestinationAmount.isPositive() && feeAmount.isPositive()) {
+                    const newDestinationAmount = newValueToSet.subtract(feeAmount);
+
+                    if (newDestinationAmount.between(TRANSACTION_MIN_AMOUNT, TRANSACTION_MAX_AMOUNT)) {
+                        transaction.destinationAmount = newDestinationAmount.toSafeIntegerNumber();
+                    }
+
                     return;
                 }
             }

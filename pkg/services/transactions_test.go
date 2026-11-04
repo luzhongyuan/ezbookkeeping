@@ -1626,3 +1626,28 @@ func TestCreateTransactionByScheduledTransactionTemplate_SkippedDate(t *testing.
 	assert.Equal(t, expectedValue, actualValue)
 	assert.Equal(t, []int64{}, actualTagIds)
 }
+
+func TestGetRelatedTransferTransaction_CopyFeeCategory(t *testing.T) {
+	transaction := &models.Transaction{
+		TransactionId:        1001,
+		Uid:                  123,
+		Type:                 models.TRANSACTION_DB_TYPE_TRANSFER_OUT,
+		CategoryId:           234,
+		AccountId:            345,
+		Amount:               1000,
+		RelatedId:            1002,
+		RelatedAccountId:     456,
+		RelatedAccountAmount: 990,
+		FeeCategoryId:        567,
+		TransactionTime:      1000000000000,
+	}
+
+	actualValue := Transactions.GetRelatedTransferTransaction(transaction)
+
+	assert.NotNil(t, actualValue)
+	assert.Equal(t, int64(1002), actualValue.TransactionId)
+	assert.Equal(t, models.TRANSACTION_DB_TYPE_TRANSFER_IN, actualValue.Type)
+	assert.Equal(t, int64(990), actualValue.Amount)
+	assert.Equal(t, int64(1000), actualValue.RelatedAccountAmount)
+	assert.Equal(t, int64(567), actualValue.FeeCategoryId)
+}

@@ -140,6 +140,7 @@ type Transaction struct {
 	RelatedId            int64             `xorm:"NOT NULL"`
 	RelatedAccountId     int64             `xorm:"NOT NULL"`
 	RelatedAccountAmount int64             `xorm:"NOT NULL"`
+	FeeCategoryId        int64             `xorm:"NOT NULL DEFAULT 0"`
 	RelatedTransactionId int64             `xorm:"INDEX(IDX_transaction_related_transaction_id) NOT NULL DEFAULT 0"`
 	HideAmount           bool              `xorm:"NOT NULL"`
 	Comment              string            `xorm:"VARCHAR(255) NOT NULL"`
@@ -175,6 +176,7 @@ type TransactionCreateRequest struct {
 	DestinationAccountId int64                          `json:"destinationAccountId,string" binding:"min=0"`
 	SourceAmount         int64                          `json:"sourceAmount" binding:"validTransactionAmount"`
 	DestinationAmount    int64                          `json:"destinationAmount" binding:"validTransactionAmount"`
+	FeeCategoryId        int64                          `json:"feeCategoryId,string" binding:"min=0"`
 	RelatedTransactionId int64                          `json:"relatedTransactionId,string" binding:"min=0"`
 	HideAmount           bool                           `json:"hideAmount"`
 	TagIds               []string                       `json:"tagIds"`
@@ -199,6 +201,7 @@ type TransactionModifyRequest struct {
 	DestinationAccountId int64                          `json:"destinationAccountId,string" binding:"min=0"`
 	SourceAmount         int64                          `json:"sourceAmount" binding:"validTransactionAmount"`
 	DestinationAmount    int64                          `json:"destinationAmount" binding:"validTransactionAmount"`
+	FeeCategoryId        int64                          `json:"feeCategoryId,string" binding:"min=0"`
 	RelatedTransactionId int64                          `json:"relatedTransactionId,string" binding:"min=0"`
 	HideAmount           bool                           `json:"hideAmount"`
 	TagIds               []string                       `json:"tagIds"`
@@ -457,6 +460,7 @@ type TransactionInfoResponse struct {
 	DestinationAccount   *AccountInfoResponse                     `json:"destinationAccount,omitempty"`
 	SourceAmount         int64                                    `json:"sourceAmount"`
 	DestinationAmount    *int64                                   `json:"destinationAmount,omitempty"`
+	FeeCategoryId        int64                                    `json:"feeCategoryId,string,omitempty"`
 	RelatedTransactionId int64                                    `json:"relatedTransactionId,string,omitempty"`
 	RefundedAmount       int64                                    `json:"refundedAmount,omitempty"`
 	Refunds              []*TransactionRefundInfoResponse         `json:"refunds,omitempty"`
@@ -712,6 +716,7 @@ func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, editable bool) *
 		DestinationAccountId: destinationAccountId,
 		SourceAmount:         sourceAmount,
 		DestinationAmount:    destinationAmount,
+		FeeCategoryId:        t.FeeCategoryId,
 		RelatedTransactionId: t.RelatedTransactionId,
 		HideAmount:           t.HideAmount,
 		TagIds:               utils.Int64ArrayToStringArray(tagIds),

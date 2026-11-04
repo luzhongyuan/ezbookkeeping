@@ -129,6 +129,45 @@
             </f7-list-item>
 
             <f7-list-item
+                class="list-item-with-header-and-title"
+                :header="tt('Transfer Fee')"
+                :title="getDisplayAmount(parseBigDecimal(transferFeeAmount), transaction.hideAmount, sourceAccountCurrency)"
+                v-if="hasTransferFee"
+            ></f7-list-item>
+
+            <f7-list-item
+                class="list-item-with-header-and-title list-item-title-hide-overflow"
+                key="transferFeeCategorySelection"
+                link="#" no-chevron
+                :class="{ 'disabled': !hasVisibleExpenseCategories, 'readonly': mode === TransactionEditPageMode.View }"
+                :header="tt('Transfer Fee Category')"
+                @click="showFeeCategorySheet = true"
+                v-if="hasTransferFee"
+            >
+                <template #title>
+                    <div class="list-item-custom-title" v-if="hasVisibleExpenseCategories">
+                        <span>{{ getTransactionPrimaryCategoryName(transaction.feeCategoryId, allCategories[CategoryType.Expense]) }}</span>
+                        <f7-icon class="category-separate-icon icon-with-direction" f7="chevron_right"></f7-icon>
+                        <span>{{ getTransactionSecondaryCategoryName(transaction.feeCategoryId, allCategories[CategoryType.Expense]) }}</span>
+                    </div>
+                    <div class="list-item-custom-title" v-else-if="!hasVisibleExpenseCategories">
+                        <span>{{ tt('None') }}</span>
+                    </div>
+                </template>
+                <tree-view-selection-sheet primary-key-field="id" primary-title-field="name"
+                                           primary-icon-field="icon" primary-icon-type-field="iconType" primary-icon-type="category" primary-color-field="color"
+                                           primary-hidden-field="hidden" primary-sub-items-field="subCategories"
+                                           secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
+                                           secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="category" secondary-color-field="color"
+                                           secondary-hidden-field="hidden"
+                                           :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
+                                           :items="allCategories[CategoryType.Expense]"
+                                           v-model:show="showFeeCategorySheet"
+                                           v-model="transaction.feeCategoryId">
+                </tree-view-selection-sheet>
+            </f7-list-item>
+
+            <f7-list-item
                 class="list-item-with-header-and-title list-item-title-hide-overflow"
                 key="expenseCategorySelection"
                 link="#" no-chevron
@@ -670,6 +709,8 @@ const {
     destinationAccountName,
     sourceAccountCurrency,
     destinationAccountCurrency,
+    transferFeeAmount,
+    hasTransferFee,
     transactionDisplayTimezone,
     transactionTimezoneTimeDifference,
     geoLocationStatusInfo,
@@ -711,6 +752,7 @@ const showMoreActionSheet = ref<boolean>(false);
 const showSourceAmountSheet = ref<boolean>(false);
 const showDestinationAmountSheet = ref<boolean>(false);
 const showCategorySheet = ref<boolean>(false);
+const showFeeCategorySheet = ref<boolean>(false);
 const showSourceAccountSheet = ref<boolean>(false);
 const showDestinationAccountSheet = ref<boolean>(false);
 const showTransactionDateTimeSheet = ref<boolean>(false);

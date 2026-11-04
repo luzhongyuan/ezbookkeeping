@@ -60,4 +60,5 @@ var (
 	ErrCannotModifyTransactionAmountBelowRefundedAmount            = NewNormalError(NormalSubcategoryTransaction, 53, http.StatusBadRequest, "cannot modify the transaction amount to be less than the refunded amount")
 	ErrTransactionBatchCreateNoTransactions                        = NewNormalError(NormalSubcategoryTransaction, 54, http.StatusBadRequest, "no transactions")
 	ErrTransactionBatchCreateTooManyTransactions                   = NewNormalError(NormalSubcategoryTransaction, 55, http.StatusBadRequest, "too many transactions")
+	ErrTransactionDestinationAmountGreaterThanSourceAmount         = NewNormalError(NormalSubcategoryTransaction, 56, http.StatusBadRequest, "transfer destination amount cannot be greater than source amount")
 )
